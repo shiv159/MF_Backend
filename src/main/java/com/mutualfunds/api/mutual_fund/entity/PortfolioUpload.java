@@ -2,7 +2,10 @@ package com.mutualfunds.api.mutual_fund.entity;
 
 import com.mutualfunds.api.mutual_fund.enums.UploadStatus;
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
