@@ -19,4 +19,6 @@ public interface FundRepository extends JpaRepository<Fund, UUID> {
 
     @Query("SELECT f FROM Fund f WHERE f.fundCategory = :category AND f.directPlan = true AND f.expenseRatio < :maxER ORDER BY f.expenseRatio ASC")
     List<Fund> findTopFundsByCategoryAndExpenseRatio(@Param("category") String category, @Param("maxER") Double maxER);
+
+    List<Fund> findByDirectPlanTrueAndExpenseRatioLessThanOrderByExpenseRatioAsc(double expenseRatio);
 }

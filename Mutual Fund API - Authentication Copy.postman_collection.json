@@ -1,0 +1,506 @@
+{
+	"info": {
+		"_postman_id": "9dc94b16-5574-4143-8fa0-42d0a0607de4",
+		"name": "Mutual Fund API - Authentication Copy",
+		"description": "Postman collection for testing authentication and onboarding endpoints",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "16129409",
+		"_collection_link": "https://grey-robot-799575.postman.co/workspace/MF_TOOLS~4516dbd3-df93-4b18-b90b-2fbed6e04703/collection/16129409-9dc94b16-5574-4143-8fa0-42d0a0607de4?action=share&source=collection_link&creator=16129409"
+	},
+	"item": [
+		{
+			"name": "Register User",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// @ts-check",
+							"// Types from @postman/test-script-types-plugin are available",
+							"",
+							"// Parse the response body as JSON",
+							"const responseBodyJson = pm.response.json();",
+							"",
+							"// Check that the status code is 200",
+							"pm.test('Status code is 200', function () {",
+							"  pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// Check that the response has required properties",
+							"pm.test('Response has required properties', function () {",
+							"  pm.expect(responseBodyJson).to.have.property('status');",
+							"  pm.expect(responseBodyJson).to.have.property('accessToken');",
+							"  pm.expect(responseBodyJson).to.have.property('userId');",
+							"  pm.expect(responseBodyJson).to.have.property('email');",
+							"  pm.expect(responseBodyJson).to.have.property('createdAt');",
+							"});",
+							"",
+							"// Check that status is success",
+							"pm.test('Status is success', function () {",
+							"  pm.expect(responseBodyJson.status).to.equal('success');",
+							"});",
+							"",
+							"// Save the access token to environment variable",
+							"pm.test('Save access token', function () {",
+							"  if (responseBodyJson.accessToken) {",
+							"    pm.environment.set('access_token', responseBodyJson.accessToken);",
+							"  }",
+							"});",
+							"",
+							"// Save the userId to environment variable",
+							"pm.test('Save userId', function () {",
+							"  if (responseBodyJson.userId) {",
+							"    pm.environment.set('user_id', responseBodyJson.userId);",
+							"  }",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\",\n  \"fullName\": \"Test User\",\n  \"phone\": \"+1234567890\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/auth/register",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Login User",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// @ts-check",
+							"// Types from @postman/test-script-types-plugin are available",
+							"",
+							"// Parse the response body as JSON",
+							"const responseBodyJson = pm.response.json();",
+							"",
+							"// Check that the status code is 200",
+							"pm.test('Status code is 200', function () {",
+							"  pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// Check that the response has required properties",
+							"pm.test('Response has required properties', function () {",
+							"  pm.expect(responseBodyJson).to.have.property('status');",
+							"  pm.expect(responseBodyJson).to.have.property('accessToken');",
+							"  pm.expect(responseBodyJson).to.have.property('userId');",
+							"  pm.expect(responseBodyJson).to.have.property('email');",
+							"  pm.expect(responseBodyJson).to.have.property('createdAt');",
+							"});",
+							"",
+							"// Check that status is success",
+							"pm.test('Status is success', function () {",
+							"  pm.expect(responseBodyJson.status).to.equal('success');",
+							"});",
+							"",
+							"// Save the access token to environment variable",
+							"pm.test('Save access token', function () {",
+							"  if (responseBodyJson.accessToken) {",
+							"    pm.environment.set('access_token', responseBodyJson.accessToken);",
+							"  }",
+							"});",
+							"",
+							"// Save the userId to environment variable",
+							"pm.test('Save userId', function () {",
+							"  if (responseBodyJson.userId) {",
+							"    pm.environment.set('user_id', responseBodyJson.userId);",
+							"  }",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/v1/auth/login",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"auth",
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Test JWT Access",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// @ts-check",
+							"",
+							"// Check that the status code is 200",
+							"pm.test('Status code is 200', function () {",
+							"  pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// Check that the response contains protected resource message",
+							"pm.test('Response contains protected resource access', function () {",
+							"  pm.expect(pm.response.text()).to.include('Protected resource accessed');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/v1/protected",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"protected"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Create Risk Profile & Get Recommendations",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// @ts-check",
+							"// Types from @postman/test-script-types-plugin are available",
+							"",
+							"// Parse the response body as JSON",
+							"const responseBodyJson = pm.response.json();",
+							"",
+							"// Check that the status code is 200",
+							"pm.test('Status code is 200', function () {",
+							"  pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// Check that the response has required properties",
+							"pm.test('Response has required properties', function () {",
+							"  pm.expect(responseBodyJson).to.have.property('nextStep');",
+							"  // starterPlan may or may not be present depending on user type",
+							"});",
+							"",
+							"// Check that nextStep is valid",
+							"pm.test('Next step is valid', function () {",
+							"  const validNextSteps = ['portfolio_upload'];",
+							"  pm.expect(validNextSteps).to.include(responseBodyJson.nextStep);",
+							"});",
+							"",
+							"// Check starter plan if present",
+							"if (responseBodyJson.starterPlan) {",
+							"  pm.test('Starter plan has correct structure', function () {",
+							"    const starterPlan = responseBodyJson.starterPlan;",
+							"    pm.expect(starterPlan).to.have.property('equityAllocation');",
+							"    pm.expect(starterPlan).to.have.property('debtAllocation');",
+							"    pm.expect(starterPlan).to.have.property('recommendedFunds');",
+							"    pm.expect(starterPlan).to.have.property('sipDistribution');",
+							"  });",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"riskTolerance\": \"MODERATE\",\n  \"investmentHorizon\": 5,\n  \"primaryGoal\": \"RETIREMENT\",\n  \"monthlyInvestment\": 10000\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/onboarding/risk-profile",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"onboarding",
+						"risk-profile"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Upload Portfolio (Conservative)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// @ts-check",
+							"",
+							"// Check that the status code is 202 (Accepted)",
+							"pm.test('Status code is 202', function () {",
+							"  pm.response.to.have.status(202);",
+							"});",
+							"",
+							"// Parse the response body as JSON",
+							"const responseBodyJson = pm.response.json();",
+							"",
+							"// Check that the response has required properties",
+							"pm.test('Response has required properties', function () {",
+							"  pm.expect(responseBodyJson).to.have.property('uploadId');",
+							"  pm.expect(responseBodyJson).to.have.property('status');",
+							"});",
+							"",
+							"// Check that uploadId is a valid UUID",
+							"pm.test('UploadId is valid UUID', function () {",
+							"  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;",
+							"  pm.expect(responseBodyJson.uploadId).to.match(uuidRegex);",
+							"});",
+							"",
+							"// Check that status is valid",
+							"pm.test('Status is valid', function () {",
+							"  const validStatuses = ['processing', 'completed', 'failed'];",
+							"  pm.expect(validStatuses).to.include(responseBodyJson.status.toLowerCase());",
+							"});",
+							"",
+							"// Save uploadId for status checking",
+							"pm.test('Save uploadId', function () {",
+							"  if (responseBodyJson.uploadId) {",
+							"    pm.environment.set('upload_id', responseBodyJson.uploadId);",
+							"  }",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"fileName\": \"conservative_portfolio.csv\",\n  \"fileContent\": \"U2NoZW1lLEZ1bmQgTmFtZSxVbml0cyxOQVYsRGF0ZQpJU0lOLEhERkMgQmFua2luZyAmIFBTVSBGdW5kLDEwMDAuMCwxMDAuMCwyMDIzLTEwLTEwCkRJUixJQ0lDSSBQcnVkZW50aWFsIExpZ3VpZCBGdW5kLDUwMC4wLDEwMC4wLDIwMjMtMTAtMTA=\",\n  \"fileType\": \"text/csv\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/onboarding/uploads",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"onboarding",
+						"uploads"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Upload Portfolio (Aggressive)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// @ts-check",
+							"",
+							"// Check that the status code is 202 (Accepted)",
+							"pm.test('Status code is 202', function () {",
+							"  pm.response.to.have.status(202);",
+							"});",
+							"",
+							"// Parse the response body as JSON",
+							"const responseBodyJson = pm.response.json();",
+							"",
+							"// Check that the response has required properties",
+							"pm.test('Response has required properties', function () {",
+							"  pm.expect(responseBodyJson).to.have.property('uploadId');",
+							"  pm.expect(responseBodyJson).to.have.property('status');",
+							"});",
+							"",
+							"// Check that uploadId is a valid UUID",
+							"pm.test('UploadId is valid UUID', function () {",
+							"  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;",
+							"  pm.expect(responseBodyJson.uploadId).to.match(uuidRegex);",
+							"});",
+							"",
+							"// Check that status is valid",
+							"pm.test('Status is valid', function () {",
+							"  const validStatuses = ['processing', 'completed', 'failed'];",
+							"  pm.expect(validStatuses).to.include(responseBodyJson.status.toLowerCase());",
+							"});",
+							"",
+							"// Save uploadId for status checking",
+							"pm.test('Save uploadId', function () {",
+							"  if (responseBodyJson.uploadId) {",
+							"    pm.environment.set('upload_id', responseBodyJson.uploadId);",
+							"  }",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"fileName\": \"aggressive_portfolio.csv\",\n  \"fileContent\": \"U2NoZW1lLEZ1bmQgTmFtZSxVbml0cyxOQVYsRGF0ZQpFU1NJT0wsSERGQyBUb3AgMTAwIEZ1bmQsNTAwLjAsMTUwLjAsMjAyMy0xMC0xMApFU1NJT0wsSUNJQ0kgUHJ1ZGVudGlhbCBCbHVlY2hpcCBGdW5kLDMwMC4wLDE1MC4wLDIwMjMtMTAtMTA=\",\n  \"fileType\": \"text/csv\"\n}"
+				},
+				"url": {
+					"raw": "{{base_url}}/api/onboarding/uploads",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"onboarding",
+						"uploads"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Check Upload Status",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// @ts-check",
+							"",
+							"// Check that the status code is 200",
+							"pm.test('Status code is 200', function () {",
+							"  pm.response.to.have.status(200);",
+							"});",
+							"",
+							"// Parse the response body as JSON",
+							"const responseBodyJson = pm.response.json();",
+							"",
+							"// Check that the response has required properties",
+							"pm.test('Response has required properties', function () {",
+							"  pm.expect(responseBodyJson).to.have.property('uploadId');",
+							"  pm.expect(responseBodyJson).to.have.property('status');",
+							"});",
+							"",
+							"// Check that uploadId matches the requested one",
+							"pm.test('UploadId matches requested', function () {",
+							"  pm.expect(responseBodyJson.uploadId).to.equal(pm.environment.get('upload_id'));",
+							"});",
+							"",
+							"// Check that status is valid",
+							"pm.test('Status is valid', function () {",
+							"  const validStatuses = ['processing', 'completed', 'failed'];",
+							"  pm.expect(validStatuses).to.include(responseBodyJson.status.toLowerCase());",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer {{access_token}}"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/onboarding/uploads/{{upload_id}}",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"onboarding",
+						"uploads",
+						"{{upload_id}}"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		}
+	]
+}

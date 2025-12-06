@@ -1,10 +1,9 @@
 -- PostgreSQL Schema for Mutual Fund Portfolio Platform
 
--- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Users table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255),
@@ -12,7 +11,7 @@ CREATE TABLE users (
     phone VARCHAR(20),
     user_type VARCHAR(20) CHECK (user_type IN ('existing_investor', 'new_investor')),
     investment_horizon_years INTEGER,
-    risk_tolerance VARCHAR(20) CHECK (risk_tolerance IN ('conservative', 'balanced', 'aggressive')),
+    risk_tolerance VARCHAR(20) CHECK (risk_tolerance IN ('CONSERVATIVE', 'MODERATE', 'AGGRESSIVE')),
     monthly_sip_amount DECIMAL(15,2),
     primary_goal VARCHAR(255),
     is_active BOOLEAN DEFAULT TRUE,
@@ -21,7 +20,7 @@ CREATE TABLE users (
 );
 
 -- Funds table
-CREATE TABLE funds (
+CREATE TABLE IF NOT EXISTS funds (
     fund_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     fund_name VARCHAR(255) UNIQUE NOT NULL,
     isin VARCHAR(12) UNIQUE NOT NULL,
@@ -40,7 +39,7 @@ CREATE TABLE funds (
 );
 
 -- User Holdings table
-CREATE TABLE user_holdings (
+CREATE TABLE IF NOT EXISTS user_holdings (
     user_holding_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     fund_id UUID NOT NULL REFERENCES funds(fund_id) ON DELETE CASCADE,
@@ -55,7 +54,7 @@ CREATE TABLE user_holdings (
 );
 
 -- Portfolio Uploads table
-CREATE TABLE portfolio_uploads (
+CREATE TABLE IF NOT EXISTS portfolio_uploads (
     upload_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     file_name VARCHAR(255),
@@ -68,7 +67,7 @@ CREATE TABLE portfolio_uploads (
 );
 
 -- AI Insights table
-CREATE TABLE ai_insights (
+CREATE TABLE IF NOT EXISTS ai_insights (
     insight_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     question TEXT,
@@ -78,9 +77,9 @@ CREATE TABLE ai_insights (
 );
 
 -- Indices
-CREATE INDEX idx_user_holdings_user ON user_holdings(user_id);
-CREATE INDEX idx_user_holdings_fund ON user_holdings(fund_id);
-CREATE INDEX idx_ai_insights_user ON ai_insights(user_id);
-CREATE INDEX idx_portfolio_uploads_user ON portfolio_uploads(user_id);
-CREATE INDEX idx_funds_isin ON funds(isin);
-CREATE INDEX idx_funds_category ON funds(fund_category);
+CREATE INDEX IF NOT EXISTS idx_user_holdings_user ON user_holdings(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_holdings_fund ON user_holdings(fund_id);
+CREATE INDEX IF NOT EXISTS idx_ai_insights_user ON ai_insights(user_id);
+CREATE INDEX IF NOT EXISTS idx_portfolio_uploads_user ON portfolio_uploads(user_id);
+CREATE INDEX IF NOT EXISTS idx_funds_isin ON funds(isin);
+CREATE INDEX IF NOT EXISTS idx_funds_category ON funds(fund_category);
