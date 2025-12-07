@@ -12,6 +12,8 @@ import com.mutualfunds.api.mutual_fund.enums.UserType;
 import com.mutualfunds.api.mutual_fund.repository.PortfolioUploadRepository;
 import com.mutualfunds.api.mutual_fund.repository.UserRepository;
 import com.mutualfunds.api.mutual_fund.service.RecommendationService;
+import com.mutualfunds.api.mutual_fund.service.ETLEnrichmentService;
+import com.mutualfunds.api.mutual_fund.service.FileParsingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -43,6 +46,12 @@ public class OnboardingController {
     
     @Autowired
     private RecommendationService recommendationService;
+    
+    @Autowired
+    private FileParsingService fileParsingService;
+    
+    @Autowired
+    private ETLEnrichmentService etlEnrichmentService;
 
     @PostMapping("/risk-profile")
     public ResponseEntity<RiskProfileResponse> updateRiskProfile(@Valid @RequestBody RiskProfileRequest request) {
@@ -131,17 +140,39 @@ public class OnboardingController {
     public void startUploadJob(UUID uploadId) {
         log.info("Starting async upload processing for upload ID: {}", uploadId);
         try {
-            Thread.sleep(5000); // simulate processing
-            PortfolioUpload upload = portfolioUploadRepository.findById(uploadId).orElseThrow();
+            PortfolioUpload upload = portfolioUploadRepository.findById(uploadId)
+                    .orElseThrow(() -> new RuntimeException("Upload not found"));
+            
+            // Step 1: Parse the file
+            log.debug("Parsing file: {} for upload ID: {}", upload.getFileName(), uploadId);
+            Path filePath = Paths.get(upload.getFilePath());
+            List<Map<String, Object>> parsedData = fileParsingService.parseFile(filePath, upload.getFileType());
+            log.info("File parsed successfully. Extracted {} records for upload ID: {}", parsedData.size(), uploadId);
+            
+            // Step 2: Enrich the data using ETL service
+            log.debug("Starting ETL enrichment for {} records", parsedData.size());
+            List<Map<String, Object>> enrichedData = etlEnrichmentService.enrichPortfolioData(
+                    parsedData,
+                    upload.getUser().getUserId()
+            );
+            log.info("ETL enrichment completed. Enriched {} records for upload ID: {}", enrichedData.size(), uploadId);
+            
+            // Step 3: Save enriched data and update upload status
             upload.setStatus(UploadStatus.completed);
+            upload.setProcessedRecords((long) enrichedData.size());
             portfolioUploadRepository.save(upload);
-            log.info("Upload processing completed successfully for upload ID: {}", uploadId);
+            log.info("Upload processing completed successfully for upload ID: {}. Processed {} records", uploadId, enrichedData.size());
+            
         } catch (Exception e) {
             log.error("Upload processing failed for upload ID: {}", uploadId, e);
-            PortfolioUpload upload = portfolioUploadRepository.findById(uploadId).orElseThrow();
-            upload.setStatus(UploadStatus.failed);
-            upload.setErrorMessage(e.getMessage());
-            portfolioUploadRepository.save(upload);
+            try {
+                PortfolioUpload upload = portfolioUploadRepository.findById(uploadId).orElseThrow();
+                upload.setStatus(UploadStatus.failed);
+                upload.setErrorMessage(e.getMessage());
+                portfolioUploadRepository.save(upload);
+            } catch (Exception ex) {
+                log.error("Failed to update upload status to failed for upload ID: {}", uploadId, ex);
+            }
         }
     }
 
