@@ -40,7 +40,7 @@ public class ETLClient {
                 url, request.getParsedHoldings().size());
         log.debug("Enrichment request details: uploadId={}, userId={}", 
                 request.getUploadId(), request.getUserId());
-        log.debug("Enrichment request full payload: {}", request);        
+        log.debug("Enrichment request full payload: {}", request);
         
         return webClient
                 .post()
