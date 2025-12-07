@@ -24,11 +24,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.File;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
@@ -92,21 +87,6 @@ public class OnboardingController {
         try {
             log.info("Processing portfolio upload request for user: {}", request.getUserId());
 
-            // Save file to temp location
-            String tempDir = System.getProperty("java.io.tmpdir");
-            String fileName = UUID.randomUUID().toString() + "_" + request.getFileName();
-            Path filePath = Paths.get(tempDir, fileName);
-
-            log.debug("Saving uploaded file: {} to temp location: {}", request.getFileName(), filePath);
-            try {
-                byte[] fileBytes = Base64.getDecoder().decode(request.getFileContent());
-                Files.write(filePath, fileBytes);
-                log.info("File saved successfully: {}", fileName);
-            } catch (IOException e) {
-                log.error("Failed to save uploaded file: {}", fileName, e);
-                throw new RuntimeException("Failed to save file: " + e.getMessage(), e);
-            }
-
             // Create portfolio upload record
             User user = userRepository.findById(request.getUserId())
                     .orElseThrow(() -> new RuntimeException("User not found"));
@@ -117,7 +97,7 @@ public class OnboardingController {
                     .fileName(request.getFileName())
                     .fileType(request.getFileType())
                     .fileSize((long) request.getFileContent().length())
-                    .filePath(filePath.toString())
+                    .filePath(null)  // No temp file storage needed
                     .uploadDate(LocalDateTime.now())
                     .status(UploadStatus.parsing)
                     .build();
@@ -125,8 +105,8 @@ public class OnboardingController {
             PortfolioUpload saved = portfolioUploadRepository.save(upload);
             log.info("Portfolio upload record created with ID: {}", saved.getUploadId());
 
-            // Start async processing
-            startUploadJob(saved.getUploadId());
+            // Start async processing with Base64 content
+            startUploadJob(saved.getUploadId(), request.getFileContent(), request.getFileType());
             log.info("Async processing started for upload ID: {}", saved.getUploadId());
 
             return ResponseEntity.ok(new UploadResponse(saved.getUploadId(), saved.getStatus()));
@@ -137,16 +117,16 @@ public class OnboardingController {
     }
 
     @Async
-    public void startUploadJob(UUID uploadId) {
+    public void startUploadJob(UUID uploadId, String fileContentBase64, String fileType) {
         log.info("Starting async upload processing for upload ID: {}", uploadId);
         try {
             PortfolioUpload upload = portfolioUploadRepository.findById(uploadId)
                     .orElseThrow(() -> new RuntimeException("Upload not found"));
             
-            // Step 1: Parse the file
-            log.debug("Parsing file: {} for upload ID: {}", upload.getFileName(), uploadId);
-            Path filePath = Paths.get(upload.getFilePath());
-            List<Map<String, Object>> parsedData = fileParsingService.parseFile(filePath, upload.getFileType());
+            // Step 1: Decode Base64 and parse the file directly
+            log.debug("Decoding and parsing file for upload ID: {}", uploadId);
+            byte[] fileBytes = Base64.getDecoder().decode(fileContentBase64);
+            List<Map<String, Object>> parsedData = fileParsingService.parseFileFromBytes(fileBytes, fileType);
             log.info("File parsed successfully. Extracted {} records for upload ID: {}", parsedData.size(), uploadId);
             
             // Step 2: Enrich the data using ETL service
@@ -157,7 +137,7 @@ public class OnboardingController {
             );
             log.info("ETL enrichment completed. Enriched {} records for upload ID: {}", enrichedData.size(), uploadId);
             
-            // Step 3: Save enriched data and update upload status
+            // Step 3: Update upload status
             upload.setStatus(UploadStatus.completed);
             upload.setProcessedRecords((long) enrichedData.size());
             portfolioUploadRepository.save(upload);

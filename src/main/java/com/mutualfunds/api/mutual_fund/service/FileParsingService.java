@@ -45,6 +45,26 @@ public class FileParsingService {
     }
 
     /**
+     * Parse file from byte array (no file storage needed)
+     * Supports .xlsx (Excel) and .pdf formats
+     *
+     * @param fileBytes Byte array of file content
+     * @param fileType File type (e.g., "xlsx", "pdf")
+     * @return List of parsed holdings as Map objects
+     */
+    public List<Map<String, Object>> parseFileFromBytes(byte[] fileBytes, String fileType) {
+        log.info("Parsing file from bytes with type: {}", fileType);
+
+        if ("xlsx".equalsIgnoreCase(fileType) || "xls".equalsIgnoreCase(fileType)) {
+            return parseExcelFromBytes(fileBytes);
+        } else if ("pdf".equalsIgnoreCase(fileType)) {
+            return parsePdfFromBytes(fileBytes);
+        } else {
+            throw new IllegalArgumentException("Unsupported file type: " + fileType);
+        }
+    }
+
+    /**
      * Parse Excel file and extract holdings
      * Assumes standard portfolio format with columns: Fund Name, ISIN, Units, Current Value
      */
@@ -103,6 +123,61 @@ public class FileParsingService {
     }
 
     /**
+     * Parse Excel file from byte array
+     */
+    private List<Map<String, Object>> parseExcelFromBytes(byte[] fileBytes) {
+        List<Map<String, Object>> holdings = new ArrayList<>();
+
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(fileBytes);
+             Workbook workbook = new XSSFWorkbook(bais)) {
+
+            Sheet sheet = workbook.getSheetAt(0);
+            log.debug("Reading Excel sheet: {}", sheet.getSheetName());
+
+            boolean isHeader = true;
+            int rowCount = 0;
+
+            for (Row row : sheet) {
+                if (isHeader) {
+                    isHeader = false;
+                    continue;
+                }
+
+                if (row.getPhysicalNumberOfCells() == 0) {
+                    continue;
+                }
+
+                Map<String, Object> holding = new HashMap<>();
+
+                String fundName = getCellValueAsString(row.getCell(0));
+                String isin = getCellValueAsString(row.getCell(1));
+                String units = getCellValueAsString(row.getCell(2));
+                String currentValue = getCellValueAsString(row.getCell(3));
+
+                if (!fundName.isEmpty() && !isin.isEmpty()) {
+                    holding.put("fundName", fundName);
+                    holding.put("isin", isin);
+                    holding.put("units", parseDouble(units));
+                    holding.put("currentValue", parseDouble(currentValue));
+                    holding.put("source", "excel");
+
+                    holdings.add(holding);
+                    rowCount++;
+                    log.debug("Parsed holding: {} (ISIN: {})", fundName, isin);
+                }
+            }
+
+            log.info("Successfully parsed {} holdings from Excel bytes", rowCount);
+
+        } catch (IOException e) {
+            log.error("Error parsing Excel from bytes", e);
+            throw new RuntimeException("Failed to parse Excel file: " + e.getMessage(), e);
+        }
+
+        return holdings;
+    }
+
+    /**
      * Parse PDF file and extract holdings
      * Attempts to extract table data or structured text from PDF
      */
@@ -154,6 +229,61 @@ public class FileParsingService {
             throw new RuntimeException("Failed to parse PDF file: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Unexpected error parsing PDF file: {}", filePath, e);
+            throw new RuntimeException("Failed to parse PDF file: " + e.getMessage(), e);
+        }
+
+        return holdings;
+    }
+
+    /**
+     * Parse PDF file from byte array
+     */
+    private List<Map<String, Object>> parsePdfFromBytes(byte[] fileBytes) {
+        List<Map<String, Object>> holdings = new ArrayList<>();
+
+        try {
+            PDDocument document = org.apache.pdfbox.Loader.loadPDF(fileBytes);
+            PDFTextStripper stripper = new PDFTextStripper();
+            String text = stripper.getText(document);
+            document.close();
+
+            log.debug("Extracted text from PDF: {} characters", text.length());
+
+            Pattern fundPattern = Pattern.compile(
+                    "([A-Za-z\\s]+)\\s+([A-Z]{2}[A-Z0-9]{9}[0-9]{1})\\s+([0-9.]+)\\s+([0-9.,]+)",
+                    Pattern.CASE_INSENSITIVE
+            );
+
+            Matcher matcher = fundPattern.matcher(text);
+            int rowCount = 0;
+
+            while (matcher.find()) {
+                String fundName = matcher.group(1).trim();
+                String isin = matcher.group(2).trim();
+                double units = parseDouble(matcher.group(3));
+                double currentValue = parseDouble(matcher.group(4));
+
+                if (!fundName.isEmpty() && !isin.isEmpty() && isin.matches("[A-Z]{2}[A-Z0-9]{9}[0-9]{1}")) {
+                    Map<String, Object> holding = new HashMap<>();
+                    holding.put("fundName", fundName);
+                    holding.put("isin", isin);
+                    holding.put("units", units);
+                    holding.put("currentValue", currentValue);
+                    holding.put("source", "pdf");
+
+                    holdings.add(holding);
+                    rowCount++;
+                    log.debug("Parsed holding from PDF: {} (ISIN: {})", fundName, isin);
+                }
+            }
+
+            log.info("Successfully parsed {} holdings from PDF bytes", rowCount);
+
+        } catch (IOException e) {
+            log.error("Error parsing PDF from bytes", e);
+            throw new RuntimeException("Failed to parse PDF file: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Unexpected error parsing PDF from bytes", e);
             throw new RuntimeException("Failed to parse PDF file: " + e.getMessage(), e);
         }
 
