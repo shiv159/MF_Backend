@@ -110,7 +110,7 @@ public class OnboardingController {
                     .fileSize((long) request.getFileContent().length())
                     .filePath(filePath.toString())
                     .uploadDate(LocalDateTime.now())
-                    .status(UploadStatus.processing)
+                    .status(UploadStatus.parsing)
                     .build();
 
             PortfolioUpload saved = portfolioUploadRepository.save(upload);
