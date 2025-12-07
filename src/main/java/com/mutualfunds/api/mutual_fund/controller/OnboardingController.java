@@ -124,7 +124,9 @@ public class OnboardingController {
             
             // Step 1: Decode Base64 and parse the file directly
             log.debug("Decoding and parsing file for upload ID: {}", uploadId);
-            byte[] fileBytes = Base64.getDecoder().decode(fileContentBase64);
+            // Remove whitespace from base64 string (spaces, newlines, tabs)
+            String cleanBase64 = fileContentBase64.replaceAll("\\s+", "");
+            byte[] fileBytes = Base64.getDecoder().decode(cleanBase64);
             List<Map<String, Object>> parsedData = fileParsingService.parseFileFromBytes(fileBytes, fileType);
             log.info("File parsed successfully. Extracted {} records for upload ID: {}", parsedData.size(), uploadId);
             
