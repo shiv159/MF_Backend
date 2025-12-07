@@ -139,7 +139,6 @@ public class OnboardingController {
             
             // Step 3: Update upload status
             upload.setStatus(UploadStatus.completed);
-            upload.setParsedHoldingsCount(enrichedData.size());
             portfolioUploadRepository.save(upload);
             log.info("Upload processing completed successfully for upload ID: {}. Processed {} records", uploadId, enrichedData.size());
             
