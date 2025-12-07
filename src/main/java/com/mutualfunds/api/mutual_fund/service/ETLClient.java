@@ -46,30 +46,41 @@ public class ETLClient {
                 .post()
                 .uri(url)
                 .bodyValue(request)
-                .retrieve()
-                .bodyToMono(EnrichmentResponse.class)
-                .doOnSuccess(response -> {
-                    if (response != null && "completed".equalsIgnoreCase(response.getStatus())) {
-                        log.info("Enrichment completed for upload {}: {} funds enriched, {} failed",
-                                request.getUploadId(),
-                                response.getEnrichmentQuality() != null ? response.getEnrichmentQuality().getSuccessfullyEnriched() : 0,
-                                response.getEnrichmentQuality() != null ? response.getEnrichmentQuality().getFailedToEnrich() : 0);
+                .exchangeToMono(response -> {
+                    if (response.statusCode().is2xxSuccessful()) {
+                        return response.bodyToMono(EnrichmentResponse.class)
+                                .doOnSuccess(body -> {
+                                    if (body != null && "completed".equalsIgnoreCase(body.getStatus())) {
+                                        log.info("Enrichment completed for upload {}: {} funds enriched, {} failed",
+                                                request.getUploadId(),
+                                                body.getEnrichmentQuality() != null ? body.getEnrichmentQuality().getSuccessfullyEnriched() : 0,
+                                                body.getEnrichmentQuality() != null ? body.getEnrichmentQuality().getFailedToEnrich() : 0);
+                                    } else {
+                                        log.error("Enrichment failed for upload {}: {}", 
+                                                request.getUploadId(), 
+                                                body != null ? body.getErrorMessage() : "No response from ETL");
+                                    }
+                                });
                     } else {
-                        log.error("Enrichment failed for upload {}: {}", 
-                                request.getUploadId(), 
-                                response != null ? response.getErrorMessage() : "No response from ETL");
+                        return response.bodyToMono(String.class)
+                                .flatMap(errorBody -> {
+                                    log.error("ETL service returned status {} for upload {}. Error body: {}", 
+                                            response.statusCode(), 
+                                            request.getUploadId(), 
+                                            errorBody);
+                                    return Mono.just(EnrichmentResponse.builder()
+                                            .uploadId(request.getUploadId())
+                                            .status("failed")
+                                            .errorMessage("ETL error (" + response.statusCode() + "): " + errorBody)
+                                            .build());
+                                })
+                                .onErrorResume(e -> Mono.just(EnrichmentResponse.builder()
+                                        .uploadId(request.getUploadId())
+                                        .status("failed")
+                                        .errorMessage("ETL error (" + response.statusCode() + "): " + e.getMessage())
+                                        .build()));
                     }
-                })
-                .doOnError(error -> {
-                    log.error("Error calling Python ETL service at {}: {}", etlServiceUrl, error.getMessage(), error);
-                })
-                .onErrorResume(error -> Mono.just(
-                        EnrichmentResponse.builder()
-                                .uploadId(request.getUploadId())
-                                .status("failed")
-                                .errorMessage("ETL service error: " + error.getMessage())
-                                .build()
-                ));
+                });
     }
     
     /**

@@ -58,8 +58,9 @@ public class ETLEnrichmentService {
             }
 
             if (!"completed".equalsIgnoreCase(response.getStatus())) {
-                log.error("ETL service returned non-completed status: {}", response.getStatus());
-                throw new RuntimeException("ETL service enrichment failed with status: " + response.getStatus());
+                log.error("ETL service returned non-completed status: {}. Full response: {}", response.getStatus(), response);
+                log.error("Error message from ETL: {}", response.getErrorMessage());
+                throw new RuntimeException("ETL service enrichment failed with status: " + response.getStatus() + " - " + response.getErrorMessage());
             }
 
             log.info("ETL enrichment completed successfully");
