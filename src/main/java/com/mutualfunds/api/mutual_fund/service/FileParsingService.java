@@ -6,6 +6,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.pdfbox.Loader;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
@@ -108,9 +109,11 @@ public class FileParsingService {
     private List<Map<String, Object>> parsePdfFile(Path filePath) {
         List<Map<String, Object>> holdings = new ArrayList<>();
 
-        try (PDDocument document = PDDocument.load(new File(filePath.toString()))) {
+        try {
+            PDDocument document = org.apache.pdfbox.Loader.loadPDF(filePath.toFile());
             PDFTextStripper stripper = new PDFTextStripper();
             String text = stripper.getText(document);
+            document.close();
 
             log.debug("Extracted text from PDF: {} characters", text.length());
 
@@ -148,6 +151,9 @@ public class FileParsingService {
 
         } catch (IOException e) {
             log.error("Error parsing PDF file: {}", filePath, e);
+            throw new RuntimeException("Failed to parse PDF file: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Unexpected error parsing PDF file: {}", filePath, e);
             throw new RuntimeException("Failed to parse PDF file: " + e.getMessage(), e);
         }
 
