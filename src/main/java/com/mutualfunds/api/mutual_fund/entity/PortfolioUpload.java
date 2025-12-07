@@ -45,8 +45,8 @@ public class PortfolioUpload {
     @Enumerated(EnumType.STRING)
     private UploadStatus status;
 
-    @Column(name = "processed_records")
-    private Long processedRecords;
+    @Column(name = "parsed_holdings_count")
+    private Integer parsedHoldingsCount;
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
