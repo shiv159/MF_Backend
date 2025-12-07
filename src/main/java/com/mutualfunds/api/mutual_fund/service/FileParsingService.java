@@ -190,34 +190,54 @@ public class FileParsingService {
             document.close();
 
             log.debug("Extracted text from PDF: {} characters", text.length());
+            log.debug("PDF text preview: {}", text.substring(0, Math.min(500, text.length())));
 
-            // Parse holdings from text using regex patterns
-            // Looking for patterns like: Fund Name, ISIN (12 chars), Units, Value
-            Pattern fundPattern = Pattern.compile(
-                    "([A-Za-z\\s]+)\\s+([A-Z]{2}[A-Z0-9]{9}[0-9]{1})\\s+([0-9.]+)\\s+([0-9.,]+)",
-                    Pattern.CASE_INSENSITIVE
-            );
-
-            Matcher matcher = fundPattern.matcher(text);
+            // Parse holdings from text using multiple regex patterns to handle various formats
+            // Pattern 1: Fund Name + ISIN (on same or next line) + Units + Value
+            Pattern isinPattern = Pattern.compile("\\b[A-Z]{2}[A-Z0-9]{9}[0-9]{1}\\b");
+            
             int rowCount = 0;
+            List<String> lines = Arrays.asList(text.split("\\n"));
+            
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i).trim();
+                Matcher isinMatcher = isinPattern.matcher(line);
+                
+                if (isinMatcher.find()) {
+                    String isin = isinMatcher.group().trim();
+                    
+                    // Extract potential fund name (text before ISIN)
+                    String beforeIsin = line.substring(0, isinMatcher.start()).trim();
+                    String afterIsin = line.substring(isinMatcher.end()).trim();
+                    
+                    // Try to extract units and value from after ISIN or next line
+                    String fundName = beforeIsin.isEmpty() && i > 0 ? 
+                            lines.get(i - 1).trim() : beforeIsin;
+                    
+                    // Extract numbers from afterIsin
+                    Pattern numberPattern = Pattern.compile("([0-9.]+)");
+                    Matcher numberMatcher = numberPattern.matcher(afterIsin);
+                    
+                    List<Double> numbers = new ArrayList<>();
+                    while (numberMatcher.find()) {
+                        numbers.add(parseDouble(numberMatcher.group(1)));
+                    }
+                    
+                    // If we have enough numbers and a fund name with ISIN
+                    if (!fundName.isEmpty() && numbers.size() >= 1 && 
+                        isin.matches("[A-Z]{2}[A-Z0-9]{9}[0-9]{1}")) {
+                        
+                        Map<String, Object> holding = new HashMap<>();
+                        holding.put("fundName", fundName);
+                        holding.put("isin", isin);
+                        holding.put("units", numbers.size() > 0 ? numbers.get(0) : 0.0);
+                        holding.put("currentValue", numbers.size() > 1 ? numbers.get(1) : 0.0);
+                        holding.put("source", "pdf");
 
-            while (matcher.find()) {
-                String fundName = matcher.group(1).trim();
-                String isin = matcher.group(2).trim();
-                double units = parseDouble(matcher.group(3));
-                double currentValue = parseDouble(matcher.group(4));
-
-                if (!fundName.isEmpty() && !isin.isEmpty() && isin.matches("[A-Z]{2}[A-Z0-9]{9}[0-9]{1}")) {
-                    Map<String, Object> holding = new HashMap<>();
-                    holding.put("fundName", fundName);
-                    holding.put("isin", isin);
-                    holding.put("units", units);
-                    holding.put("currentValue", currentValue);
-                    holding.put("source", "pdf");
-
-                    holdings.add(holding);
-                    rowCount++;
-                    log.debug("Parsed holding from PDF: {} (ISIN: {})", fundName, isin);
+                        holdings.add(holding);
+                        rowCount++;
+                        log.debug("Parsed holding from PDF: {} (ISIN: {})", fundName, isin);
+                    }
                 }
             }
 
@@ -247,32 +267,53 @@ public class FileParsingService {
             document.close();
 
             log.debug("Extracted text from PDF: {} characters", text.length());
+            log.debug("PDF text preview: {}", text.substring(0, Math.min(500, text.length())));
 
-            Pattern fundPattern = Pattern.compile(
-                    "([A-Za-z\\s]+)\\s+([A-Z]{2}[A-Z0-9]{9}[0-9]{1})\\s+([0-9.]+)\\s+([0-9.,]+)",
-                    Pattern.CASE_INSENSITIVE
-            );
-
-            Matcher matcher = fundPattern.matcher(text);
+            // Parse holdings from text using multiple regex patterns to handle various formats
+            Pattern isinPattern = Pattern.compile("\\b[A-Z]{2}[A-Z0-9]{9}[0-9]{1}\\b");
+            
             int rowCount = 0;
+            List<String> lines = Arrays.asList(text.split("\\n"));
+            
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i).trim();
+                Matcher isinMatcher = isinPattern.matcher(line);
+                
+                if (isinMatcher.find()) {
+                    String isin = isinMatcher.group().trim();
+                    
+                    // Extract potential fund name (text before ISIN)
+                    String beforeIsin = line.substring(0, isinMatcher.start()).trim();
+                    String afterIsin = line.substring(isinMatcher.end()).trim();
+                    
+                    // Try to extract units and value from after ISIN or next line
+                    String fundName = beforeIsin.isEmpty() && i > 0 ? 
+                            lines.get(i - 1).trim() : beforeIsin;
+                    
+                    // Extract numbers from afterIsin
+                    Pattern numberPattern = Pattern.compile("([0-9.]+)");
+                    Matcher numberMatcher = numberPattern.matcher(afterIsin);
+                    
+                    List<Double> numbers = new ArrayList<>();
+                    while (numberMatcher.find()) {
+                        numbers.add(parseDouble(numberMatcher.group(1)));
+                    }
+                    
+                    // If we have enough numbers and a fund name with ISIN
+                    if (!fundName.isEmpty() && numbers.size() >= 1 && 
+                        isin.matches("[A-Z]{2}[A-Z0-9]{9}[0-9]{1}")) {
+                        
+                        Map<String, Object> holding = new HashMap<>();
+                        holding.put("fundName", fundName);
+                        holding.put("isin", isin);
+                        holding.put("units", numbers.size() > 0 ? numbers.get(0) : 0.0);
+                        holding.put("currentValue", numbers.size() > 1 ? numbers.get(1) : 0.0);
+                        holding.put("source", "pdf");
 
-            while (matcher.find()) {
-                String fundName = matcher.group(1).trim();
-                String isin = matcher.group(2).trim();
-                double units = parseDouble(matcher.group(3));
-                double currentValue = parseDouble(matcher.group(4));
-
-                if (!fundName.isEmpty() && !isin.isEmpty() && isin.matches("[A-Z]{2}[A-Z0-9]{9}[0-9]{1}")) {
-                    Map<String, Object> holding = new HashMap<>();
-                    holding.put("fundName", fundName);
-                    holding.put("isin", isin);
-                    holding.put("units", units);
-                    holding.put("currentValue", currentValue);
-                    holding.put("source", "pdf");
-
-                    holdings.add(holding);
-                    rowCount++;
-                    log.debug("Parsed holding from PDF: {} (ISIN: {})", fundName, isin);
+                        holdings.add(holding);
+                        rowCount++;
+                        log.debug("Parsed holding from PDF: {} (ISIN: {})", fundName, isin);
+                    }
                 }
             }
 
