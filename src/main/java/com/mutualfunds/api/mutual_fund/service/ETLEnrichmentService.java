@@ -27,11 +27,13 @@ public class ETLEnrichmentService {
      *
      * @param parsedData List of parsed holdings from file
      * @param userId User ID for tracking
+     * @param fileType File type (xlsx, pdf) for context
      * @return EnrichmentResult containing enriched data and metrics
      */
     public EnrichmentResult enrichPortfolioData(
             List<Map<String, Object>> parsedData,
-            UUID userId) {
+            UUID userId,
+            String fileType) {
 
         log.info("Starting ETL enrichment for {} holdings for user: {}", parsedData.size(), userId);
 
@@ -40,10 +42,12 @@ public class ETLEnrichmentService {
             EnrichmentRequest request = new EnrichmentRequest();
             request.setUploadId(UUID.randomUUID());
             request.setUserId(userId);
+            request.setFileType(fileType);
             request.setParsedHoldings(parsedData);
             request.setEnrichmentTimestamp(System.currentTimeMillis());
 
             log.debug("Sending {} holdings to ETL service for enrichment", parsedData.size());
+            log.debug("Enrichment request full payload: {}", request);
 
             // Call ETL service
             EnrichmentResponse response = etlClient.enrichHoldings(request);

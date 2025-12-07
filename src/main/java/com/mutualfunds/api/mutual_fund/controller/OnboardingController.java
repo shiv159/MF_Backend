@@ -134,7 +134,8 @@ public class OnboardingController {
             log.debug("Starting ETL enrichment for {} records", parsedData.size());
             com.mutualfunds.api.mutual_fund.dto.EnrichmentResult enrichmentResult = etlEnrichmentService.enrichPortfolioData(
                     parsedData,
-                    upload.getUser().getUserId()
+                    upload.getUser().getUserId(),
+                    fileType
             );
             log.info("ETL enrichment completed. Enriched {} records for upload ID: {}", enrichmentResult.getEnrichedFundCount(), uploadId);
             
