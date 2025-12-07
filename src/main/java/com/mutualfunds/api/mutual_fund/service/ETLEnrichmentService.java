@@ -1,5 +1,6 @@
 package com.mutualfunds.api.mutual_fund.service;
 
+import com.mutualfunds.api.mutual_fund.dto.EnrichmentResult;
 import com.mutualfunds.api.mutual_fund.dto.request.EnrichmentRequest;
 import com.mutualfunds.api.mutual_fund.dto.response.EnrichmentResponse;
 import com.mutualfunds.api.mutual_fund.dto.response.EnrichedFund;
@@ -26,9 +27,9 @@ public class ETLEnrichmentService {
      *
      * @param parsedData List of parsed holdings from file
      * @param userId User ID for tracking
-     * @return Enriched holdings with complete fund information
+     * @return EnrichmentResult containing enriched data and metrics
      */
-    public List<Map<String, Object>> enrichPortfolioData(
+    public EnrichmentResult enrichPortfolioData(
             List<Map<String, Object>> parsedData,
             UUID userId) {
 
@@ -94,7 +95,12 @@ public class ETLEnrichmentService {
             
             log.info("Returning {} enriched holdings", enrichedData != null ? enrichedData.size() : 0);
 
-            return enrichedData != null ? enrichedData : new ArrayList<>();
+            return EnrichmentResult.builder()
+                    .enrichedData(enrichedData != null ? enrichedData : new ArrayList<>())
+                    .parsedHoldingsCount(response.getTotalRecords())
+                    .enrichedFundCount(response.getEnrichedRecords())
+                    .failedRecords(response.getFailedRecords())
+                    .build();
 
         } catch (Exception e) {
             log.error("Error during ETL enrichment", e);

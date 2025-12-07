@@ -36,14 +36,17 @@ public class PortfolioUpload {
     @Column(name = "file_size")
     private Long fileSize;
 
-    @Column(name = "file_path")
-    private String filePath;
-
     @Column(name = "upload_date")
     private LocalDateTime uploadDate;
 
     @Enumerated(EnumType.STRING)
     private UploadStatus status;
+
+    @Column(name = "parsed_holdings_count")
+    private Integer parsedHoldingsCount;
+
+    @Column(name = "enriched_fund_count")
+    private Integer enrichedFundCount;
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;

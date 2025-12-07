@@ -60,10 +60,10 @@ CREATE TABLE IF NOT EXISTS portfolio_uploads (
     file_name VARCHAR(255),
     file_type VARCHAR(10),
     file_size BIGINT,
-    file_path VARCHAR(500),
     upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status VARCHAR(20) CHECK (status IN ('parsing', 'enriching', 'completed', 'failed')),
     parsed_holdings_count INTEGER,
+    enriched_fund_count INTEGER,
     error_message TEXT
 );
 

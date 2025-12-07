@@ -97,7 +97,6 @@ public class OnboardingController {
                     .fileName(request.getFileName())
                     .fileType(request.getFileType())
                     .fileSize((long) request.getFileContent().length())
-                    .filePath(null)  // No temp file storage needed
                     .uploadDate(LocalDateTime.now())
                     .status(UploadStatus.parsing)
                     .build();
@@ -131,16 +130,19 @@ public class OnboardingController {
             
             // Step 2: Enrich the data using ETL service
             log.debug("Starting ETL enrichment for {} records", parsedData.size());
-            List<Map<String, Object>> enrichedData = etlEnrichmentService.enrichPortfolioData(
+            com.mutualfunds.api.mutual_fund.dto.EnrichmentResult enrichmentResult = etlEnrichmentService.enrichPortfolioData(
                     parsedData,
                     upload.getUser().getUserId()
             );
-            log.info("ETL enrichment completed. Enriched {} records for upload ID: {}", enrichedData.size(), uploadId);
+            log.info("ETL enrichment completed. Enriched {} records for upload ID: {}", enrichmentResult.getEnrichedFundCount(), uploadId);
             
-            // Step 3: Update upload status
+            // Step 3: Update upload status with enrichment metrics
             upload.setStatus(UploadStatus.completed);
+            upload.setParsedHoldingsCount(enrichmentResult.getParsedHoldingsCount());
+            upload.setEnrichedFundCount(enrichmentResult.getEnrichedFundCount());
             portfolioUploadRepository.save(upload);
-            log.info("Upload processing completed successfully for upload ID: {}. Processed {} records", uploadId, enrichedData.size());
+            log.info("Upload processing completed successfully for upload ID: {}. Parsed: {}, Enriched: {} records", 
+                    uploadId, enrichmentResult.getParsedHoldingsCount(), enrichmentResult.getEnrichedFundCount());
             
         } catch (Exception e) {
             log.error("Upload processing failed for upload ID: {}", uploadId, e);
