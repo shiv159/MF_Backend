@@ -40,6 +40,7 @@ public class PortfolioUpload {
     private LocalDateTime uploadDate;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "status")
     private UploadStatus status;
 
     @Column(name = "parsed_holdings_count")

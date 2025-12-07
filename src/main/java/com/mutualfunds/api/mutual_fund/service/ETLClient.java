@@ -20,7 +20,7 @@ public class ETLClient {
     
     private final WebClient webClient;
     
-    @Value("${etl.service.url:http://localhost:8000}")
+    @Value("${etl.service.url:http://localhost:8081}")
     private String etlServiceUrl;
     
     @Value("${etl.enrich.endpoint:/etl/enrich}")
