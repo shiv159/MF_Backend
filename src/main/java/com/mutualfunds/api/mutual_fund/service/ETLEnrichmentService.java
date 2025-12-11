@@ -4,6 +4,8 @@ import com.mutualfunds.api.mutual_fund.dto.EnrichmentResult;
 import com.mutualfunds.api.mutual_fund.dto.request.EnrichmentRequest;
 import com.mutualfunds.api.mutual_fund.dto.response.EnrichmentResponse;
 import com.mutualfunds.api.mutual_fund.dto.response.EnrichedFund;
+import com.mutualfunds.api.mutual_fund.integration.etl.IETLIntegration;
+import com.mutualfunds.api.mutual_fund.service.contract.IETLEnrichmentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,9 +19,9 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ETLEnrichmentService {
+public class ETLEnrichmentService implements IETLEnrichmentService {
 
-    private final ETLClient etlClient;
+    private final IETLIntegration etlIntegration;
 
     /**
      * Enrich portfolio holdings with fund master data
@@ -50,7 +52,7 @@ public class ETLEnrichmentService {
             log.debug("Enrichment request full payload: {}", request);
 
             // Call ETL service
-            EnrichmentResponse response = etlClient.enrichHoldings(request);
+            EnrichmentResponse response = etlIntegration.enrichHoldings(request);
 
             if (response == null) {
                 log.error("ETL service returned null response");

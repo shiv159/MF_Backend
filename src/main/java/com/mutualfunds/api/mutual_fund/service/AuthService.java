@@ -8,6 +8,7 @@ import com.mutualfunds.api.mutual_fund.enums.UserType;
 import com.mutualfunds.api.mutual_fund.exception.BadRequestException;
 import com.mutualfunds.api.mutual_fund.repository.UserRepository;
 import com.mutualfunds.api.mutual_fund.security.JWTUtil;
+import com.mutualfunds.api.mutual_fund.service.contract.IAuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -19,7 +20,7 @@ import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
-public class AuthService {
+public class AuthService implements IAuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;

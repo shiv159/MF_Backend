@@ -1,5 +1,6 @@
 package com.mutualfunds.api.mutual_fund.service;
 
+import com.mutualfunds.api.mutual_fund.service.contract.IFileParsingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
@@ -21,7 +22,7 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class FileParsingService {
+public class FileParsingService implements IFileParsingService {
 
     /**
      * Parse file based on file type

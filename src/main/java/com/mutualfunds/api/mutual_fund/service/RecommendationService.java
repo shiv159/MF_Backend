@@ -6,6 +6,7 @@ import com.mutualfunds.api.mutual_fund.entity.Fund;
 import com.mutualfunds.api.mutual_fund.entity.User;
 import com.mutualfunds.api.mutual_fund.enums.RiskTolerance;
 import com.mutualfunds.api.mutual_fund.repository.FundRepository;
+import com.mutualfunds.api.mutual_fund.service.contract.IRecommendationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -13,7 +14,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
-public class RecommendationService {
+public class RecommendationService implements IRecommendationService {
 
     private final FundRepository fundRepository;
 

@@ -3,7 +3,7 @@ package com.mutualfunds.api.mutual_fund.controller;
 import com.mutualfunds.api.mutual_fund.dto.request.LoginRequest;
 import com.mutualfunds.api.mutual_fund.dto.request.RegisterRequest;
 import com.mutualfunds.api.mutual_fund.dto.response.AuthResponse;
-import com.mutualfunds.api.mutual_fund.service.AuthService;
+import com.mutualfunds.api.mutual_fund.service.contract.IAuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 public class AuthController {
 
-    private final AuthService authService;
+    private final IAuthService authService;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {

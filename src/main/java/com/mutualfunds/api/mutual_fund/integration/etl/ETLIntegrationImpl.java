@@ -1,28 +1,28 @@
-package com.mutualfunds.api.mutual_fund.service;
+package com.mutualfunds.api.mutual_fund.integration.etl;
 
 import com.mutualfunds.api.mutual_fund.dto.request.EnrichmentRequest;
 import com.mutualfunds.api.mutual_fund.dto.response.EnrichmentResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
-
 /**
- * REST client for Python ETL service
+ * ETL service integration component
  * Uses WebClient (async/reactive) to call Python FastAPI service for enriching portfolio holdings
+ * Bridges Spring Boot application with external Python ETL microservice
  */
-@Service
+@Component
 @RequiredArgsConstructor
 @Slf4j
-public class ETLClient {
+public class ETLIntegrationImpl implements IETLIntegration {
     
     private final WebClient webClient;
     
@@ -40,6 +40,7 @@ public class ETLClient {
      * @param request Parsed holdings + upload metadata
      * @return Mono containing enriched funds ready for database insertion
      */
+    @Override
     public Mono<EnrichmentResponse> enrichHoldingsAsync(EnrichmentRequest request) {
         String url = etlServiceUrl + enrichEndpoint;
         log.info("Calling Python ETL service for enrichment (async): {} with {} holdings", 
@@ -103,6 +104,7 @@ public class ETLClient {
      * Blocking wrapper for synchronous callers
      * Converts async Mono result to blocking call
      */
+    @Override
     public EnrichmentResponse enrichHoldings(EnrichmentRequest request) {
         return enrichHoldingsAsync(request).block();
     }
