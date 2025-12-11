@@ -51,9 +51,9 @@ public class ETLIntegrationImpl implements IETLIntegration {
 
         List<Map<String, Object>> parsedHoldings = new ArrayList<>();
         Map<String, Object> holding = new LinkedHashMap<>();
-        holding.put("fund_name", "HDFC Mid Cap Fund - Growth");
+        holding.put("fund_name", "Motilal Oswal Midcap Fund Direct Growth");
         holding.put("units", 150.45);
-        holding.put("nav", 1485.5);
+        holding.put("nav", 90.5);
         holding.put("value", 223495.48);
         holding.put("purchase_date", "2020-06-15");
         parsedHoldings.add(holding);

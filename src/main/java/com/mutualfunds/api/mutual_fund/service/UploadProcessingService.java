@@ -29,6 +29,7 @@ public class UploadProcessingService implements IUploadProcessingService {
     private final PortfolioUploadRepository portfolioUploadRepository;
     private final IFileParsingService fileParsingService;
     private final IETLEnrichmentService etlEnrichmentService;
+    private final HoldingsPersistenceService holdingsPersistenceService;
 
     /**
      * Process a portfolio upload asynchronously
@@ -36,7 +37,8 @@ public class UploadProcessingService implements IUploadProcessingService {
      * 1. Decode Base64 file content
      * 2. Parse file to extract holdings
      * 3. Enrich holdings via ETL service
-     * 4. Update upload status and metrics
+     * 4. Persist enriched holdings to user_holdings table
+     * 5. Update upload status and metrics
      * 
      * @param uploadId Unique identifier of the upload record
      * @param fileContentBase64 Base64-encoded file content
@@ -66,7 +68,16 @@ public class UploadProcessingService implements IUploadProcessingService {
             );
             log.info("ETL enrichment completed. Enriched {} records for upload ID: {}", enrichmentResult.getEnrichedFundCount(), uploadId);
             
-            // Step 3: Update upload status with enrichment metrics
+            // Step 3: Persist enriched holdings to the database
+            log.debug("Starting to persist enriched holdings for user ID: {}", upload.getUser().getUserId());
+            Integer persistedCount = holdingsPersistenceService.persistEnrichedHoldings(
+                    enrichmentResult.getEnrichedData(),
+                    upload.getUser().getUserId()
+            );
+            log.info("Enriched holdings persisted successfully. {} holdings saved for user ID: {}", 
+                    persistedCount, upload.getUser().getUserId());
+            
+            // Step 4: Update upload status with enrichment metrics
             upload.setStatus(UploadStatus.completed);
             upload.setParsedHoldingsCount(enrichmentResult.getParsedHoldingsCount());
             upload.setEnrichedFundCount(enrichmentResult.getEnrichedFundCount());
