@@ -9,6 +9,162 @@
 	},
 	"item": [
 		{
+			"name": "Dashboard",
+			"item": [
+				{
+					"name": "Get Dashboard (Header Auth)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// @ts-check",
+									"// Parse the response body as JSON",
+									"const responseBodyJson = pm.response.json();",
+									"",
+									"// Check that the status code is 200",
+									"pm.test('Status code is 200', function () {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"// Check that response has required properties",
+									"pm.test('Response has user profile', function () {",
+									"  pm.expect(responseBodyJson).to.have.property('userProfile');",
+									"  pm.expect(responseBodyJson.userProfile).to.have.property('userId');",
+									"  pm.expect(responseBodyJson.userProfile).to.have.property('email');",
+									"});",
+									"",
+									"// Check portfolio summary exists",
+									"pm.test('Response has portfolio summary', function () {",
+									"  pm.expect(responseBodyJson).to.have.property('portfolioSummary');",
+									"  pm.expect(responseBodyJson.portfolioSummary).to.have.property('totalHoldings');",
+									"  pm.expect(responseBodyJson.portfolioSummary).to.have.property('gainLossPercentage');",
+									"});",
+									"",
+									"// Check holdings array exists",
+									"pm.test('Response has holdings array', function () {",
+									"  pm.expect(responseBodyJson).to.have.property('holdings');",
+									"  pm.expect(responseBodyJson.holdings).to.be.an('array');",
+									"});",
+									"",
+									"// Check upload history exists",
+									"pm.test('Response has upload history', function () {",
+									"  pm.expect(responseBodyJson).to.have.property('uploadHistory');",
+									"  pm.expect(responseBodyJson.uploadHistory).to.be.an('array');",
+									"});",
+									"",
+									"// Check AI insights exist",
+									"pm.test('Response has AI insights', function () {",
+									"  pm.expect(responseBodyJson).to.have.property('aiInsights');",
+									"  pm.expect(responseBodyJson.aiInsights).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/dashboard",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"dashboard"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Dashboard (Security Context)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// @ts-check",
+									"// Parse the response body as JSON",
+									"const responseBodyJson = pm.response.json();",
+									"",
+									"// Check that the status code is 200",
+									"pm.test('Status code is 200', function () {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"// Check that response has required properties",
+									"pm.test('Response has complete dashboard data', function () {",
+									"  pm.expect(responseBodyJson).to.have.property('userProfile');",
+									"  pm.expect(responseBodyJson).to.have.property('portfolioSummary');",
+									"  pm.expect(responseBodyJson).to.have.property('holdings');",
+									"  pm.expect(responseBodyJson).to.have.property('uploadHistory');",
+									"  pm.expect(responseBodyJson).to.have.property('aiInsights');",
+									"});",
+									"",
+									"// Validate user profile structure",
+									"pm.test('User profile has correct structure', function () {",
+									"  const profile = responseBodyJson.userProfile;",
+									"  pm.expect(profile).to.have.property('userId');",
+									"  pm.expect(profile).to.have.property('email');",
+									"  pm.expect(profile).to.have.property('fullName');",
+									"  pm.expect(profile).to.have.property('riskTolerance');",
+									"});",
+									"",
+									"// Validate portfolio summary",
+									"pm.test('Portfolio summary has correct structure', function () {",
+									"  const summary = responseBodyJson.portfolioSummary;",
+									"  pm.expect(summary).to.have.property('totalHoldings');",
+									"  pm.expect(summary).to.have.property('totalInvestmentAmount');",
+									"  pm.expect(summary).to.have.property('totalCurrentValue');",
+									"  pm.expect(summary).to.have.property('gainLoss');",
+									"  pm.expect(summary).to.have.property('gainLossPercentage');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/dashboard/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"dashboard",
+								"me"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
 			"name": "Register User",
 			"event": [
 				{
