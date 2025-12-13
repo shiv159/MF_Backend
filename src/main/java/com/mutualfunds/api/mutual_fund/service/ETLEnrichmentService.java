@@ -2,6 +2,7 @@ package com.mutualfunds.api.mutual_fund.service;
 
 import com.mutualfunds.api.mutual_fund.dto.EnrichmentResult;
 import com.mutualfunds.api.mutual_fund.dto.request.EnrichmentRequest;
+import com.mutualfunds.api.mutual_fund.dto.request.ParsedHoldingEntry;
 import com.mutualfunds.api.mutual_fund.dto.response.EnrichmentResponse;
 import com.mutualfunds.api.mutual_fund.dto.response.EnrichedFund;
 import com.mutualfunds.api.mutual_fund.integration.etl.IETLIntegration;
@@ -27,28 +28,29 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
      * Enrich portfolio holdings with fund master data
      * Calls Python ETL service to match holdings with fund information
      *
-     * @param parsedData List of parsed holdings from file
+     * @param enrichmentData List of ParsedHoldingEntry objects (already typed and validated)
      * @param userId User ID for tracking
      * @param fileType File type (xlsx, pdf) for context
      * @return EnrichmentResult containing enriched data and metrics
      */
     public EnrichmentResult enrichPortfolioData(
-            List<Map<String, Object>> parsedData,
+            List<ParsedHoldingEntry> enrichmentData,
             UUID userId,
             String fileType) {
 
-        log.info("Starting ETL enrichment for {} holdings for user: {}", parsedData.size(), userId);
+        log.info("Starting ETL enrichment for {} holdings for user: {}", enrichmentData.size(), userId);
 
         try {
-            // Build enrichment request
-            EnrichmentRequest request = new EnrichmentRequest();
-            request.setUploadId(UUID.randomUUID());
-            request.setUserId(userId);
-            request.setFileType(fileType);
-            request.setParsedHoldings(parsedData);
-            request.setEnrichmentTimestamp(System.currentTimeMillis());
+            // Build enrichment request with already-typed holdings
+            EnrichmentRequest request = EnrichmentRequest.builder()
+                    .uploadId(UUID.randomUUID())
+                    .userId(userId)
+                    .fileType(fileType)
+                    .parsedHoldings(enrichmentData)
+                    .enrichmentTimestamp(System.currentTimeMillis())
+                    .build();
 
-            log.debug("Sending {} holdings to ETL service for enrichment", parsedData.size());
+            log.debug("Sending {} holdings to ETL service for enrichment", enrichmentData.size());
             log.debug("Enrichment request full payload: {}", request);
 
             // Call ETL service
@@ -114,4 +116,6 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
             throw new RuntimeException("Failed to enrich portfolio data: " + e.getMessage(), e);
         }
     }
+
+
 }

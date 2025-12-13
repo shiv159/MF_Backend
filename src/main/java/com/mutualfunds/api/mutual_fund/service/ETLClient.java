@@ -5,11 +5,6 @@ import com.mutualfunds.api.mutual_fund.dto.response.EnrichmentResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -48,16 +43,6 @@ public class ETLClient {
                 request.getUploadId(), request.getUserId());
         log.debug("Enrichment request full payload: {}", request);
 
-        List<Map<String, Object>> parsedHoldings = new ArrayList<>();
-        Map<String, Object> holding = new LinkedHashMap<>();
-        holding.put("fund_name", "HDFC Mid Cap Fund - Growth");
-        holding.put("units", 150.45);
-        holding.put("nav", 1485.5);
-        holding.put("value", 223495.48);
-        holding.put("purchase_date", "2020-06-15");
-        parsedHoldings.add(holding);
-        request.setParsedHoldings(parsedHoldings);
-        
         return webClient
                 .post()
                 .uri(url)

@@ -9,11 +9,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
  * ETL service integration component
  * Uses WebClient (async/reactive) to call Python FastAPI service for enriching portfolio holdings
@@ -49,15 +44,17 @@ public class ETLIntegrationImpl implements IETLIntegration {
                 request.getUploadId(), request.getUserId());
         log.debug("Enrichment request full payload: {}", request);
 
-        List<Map<String, Object>> parsedHoldings = new ArrayList<>();
-        Map<String, Object> holding = new LinkedHashMap<>();
-        holding.put("fund_name", "Motilal Oswal Midcap Fund Direct Growth");
-        holding.put("units", 150.45);
-        holding.put("nav", 90.5);
-        holding.put("value", 223495.48);
-        holding.put("purchase_date", "2020-06-15");
-        parsedHoldings.add(holding);
-        request.setParsedHoldings(parsedHoldings);
+        // Create sample ParsedHoldingEntry (for testing against real ETL service)
+        // List<ParsedHoldingEntry> parsedHoldings = new ArrayList<>();
+        // ParsedHoldingEntry holding = ParsedHoldingEntry.builder()
+        //         .fundName("Motilal Oswal Midcap Fund Direct Growth")
+        //         .units(150.45)
+        //         .nav(90.5)
+        //         .value(223495.48)
+        //         .purchaseDate("2020-06-15")
+        //         .build();
+        // parsedHoldings.add(holding);
+        // request.setParsedHoldings(parsedHoldings);
         
         return webClient
                 .post()

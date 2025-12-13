@@ -14,8 +14,8 @@ public interface IUploadProcessingService {
      * Orchestrates file parsing and ETL enrichment, updates upload status
      * 
      * @param uploadId Unique identifier of the upload record
-     * @param fileContentBase64 Base64-encoded file content
-     * @param fileType File type (xlsx, pdf)
+     * @param fileBytes Raw file content as byte array
+     * @param fileType File type (xlsx, xls)
      */
-    void processUploadAsync(UUID uploadId, String fileContentBase64, String fileType);
+    void processUploadAsync(UUID uploadId, byte[] fileBytes, String fileType);
 }
