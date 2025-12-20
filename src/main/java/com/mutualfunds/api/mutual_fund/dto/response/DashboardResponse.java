@@ -14,7 +14,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class DashboardResponse {
-    
+
     private UserProfileDTO userProfile;
     private PortfolioSummaryDTO portfolioSummary;
     private List<HoldingDTO> holdings;
@@ -33,9 +33,11 @@ public class DashboardResponse {
         private String userType;
         private String riskTolerance;
         private Integer investmentHorizonYears;
-        private Double monthlySkipAmount;
+        private Double monthlySipAmount; // Fixed typo: was monthlySkipAmount
         private String primaryGoal;
+        private Boolean isActive; // Added: missing field
         private LocalDateTime createdAt;
+        private LocalDateTime updatedAt; // Added: missing field
     }
 
     @Data
@@ -62,12 +64,21 @@ public class DashboardResponse {
         private String isin;
         private String amcName;
         private String fundCategory;
+        private String fundType; // Added: missing field
+        private Double expenseRatio; // Added: missing field
+        private Double minSipAmount; // Added: missing field
+        private Boolean directPlan; // Added: missing field
+        private com.fasterxml.jackson.databind.JsonNode sectorAllocation; // Added: missing field
+        private com.fasterxml.jackson.databind.JsonNode topHoldings; // Added: missing field
+        private com.fasterxml.jackson.databind.JsonNode fundMetadata; // Added: missing field
         private Double unitsHeld;
         private Double currentNav;
+        private java.sql.Date navAsOf; // Added: missing field
         private Double investmentAmount;
         private Double currentValue;
         private Double gainLoss;
         private Double gainLossPercentage;
+        private java.sql.Date purchaseDate; // Added: missing field
         private LocalDateTime lastNavUpdate;
     }
 

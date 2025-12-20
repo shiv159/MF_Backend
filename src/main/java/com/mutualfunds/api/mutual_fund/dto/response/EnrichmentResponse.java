@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+
 
 /**
  * Response from Python ETL service after enrichment
@@ -20,10 +20,11 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class EnrichmentResponse {
     @JsonProperty("upload_id")
     @JsonAlias("uploadId")
-    private UUID uploadId;
+    private String uploadId;
     
     @JsonProperty("status")
     @JsonAlias("status")

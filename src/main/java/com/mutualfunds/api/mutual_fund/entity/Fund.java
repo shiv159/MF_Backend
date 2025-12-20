@@ -13,8 +13,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "funds", indexes = {
-    @Index(name = "idx_funds_isin", columnList = "isin"),
-    @Index(name = "idx_funds_category", columnList = "fund_category")
+        @Index(name = "idx_funds_isin", columnList = "isin"),
+        @Index(name = "idx_funds_category", columnList = "fund_category")
 })
 @Data
 @Builder
@@ -27,7 +27,7 @@ public class Fund {
     @Column(name = "fund_id")
     private UUID fundId;
 
-    @Column(name = "fund_name", unique = true, nullable = false)
+    @Column(name = "fund_name", nullable = false)
     private String fundName;
 
     @Column(unique = true, nullable = false)
@@ -59,6 +59,10 @@ public class Fund {
     @Type(JsonBinaryType.class)
     @Column(name = "top_holdings_json", columnDefinition = "jsonb")
     private JsonNode topHoldingsJson;
+
+    @Type(JsonBinaryType.class)
+    @Column(name = "fund_metadata_json", columnDefinition = "jsonb")
+    private JsonNode fundMetadataJson;
 
     @Column(name = "current_nav")
     private Double currentNav;

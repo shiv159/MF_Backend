@@ -28,9 +28,10 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
      * Enrich portfolio holdings with fund master data
      * Calls Python ETL service to match holdings with fund information
      *
-     * @param enrichmentData List of ParsedHoldingEntry objects (already typed and validated)
-     * @param userId User ID for tracking
-     * @param fileType File type (xlsx, pdf) for context
+     * @param enrichmentData List of ParsedHoldingEntry objects (already typed and
+     *                       validated)
+     * @param userId         User ID for tracking
+     * @param fileType       File type (xlsx, pdf) for context
      * @return EnrichmentResult containing enriched data and metrics
      */
     public EnrichmentResult enrichPortfolioData(
@@ -55,6 +56,7 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
 
             // Call ETL service
             EnrichmentResponse response = etlIntegration.enrichHoldings(request);
+            log.debug("ETL service response: {}", response);
 
             if (response == null) {
                 log.error("ETL service returned null response");
@@ -62,17 +64,19 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
             }
 
             if (!"completed".equalsIgnoreCase(response.getStatus())) {
-                log.error("ETL service returned non-completed status: {}. Full response: {}", response.getStatus(), response);
+                log.error("ETL service returned non-completed status: {}. Full response: {}", response.getStatus(),
+                        response);
                 log.error("Error message from ETL: {}", response.getErrorMessage());
-                throw new RuntimeException("ETL service enrichment failed with status: " + response.getStatus() + " - " + response.getErrorMessage());
+                throw new RuntimeException("ETL service enrichment failed with status: " + response.getStatus() + " - "
+                        + response.getErrorMessage());
             }
 
             log.info("ETL enrichment completed successfully");
-            
+
             Integer total = response.getTotalRecords();
             Integer enriched = response.getEnrichedRecords();
             Integer failed = response.getFailedRecords();
-            
+
             if (total != null && enriched != null && failed != null) {
                 log.info("Enrichment summary - Total: {}, Enriched: {}, Failed: {}", total, enriched, failed);
             }
@@ -97,11 +101,12 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
                         fundMap.put("navAsOf", fund.getNavAsOf());
                         fundMap.put("sectorAllocation", fund.getSectorAllocation());
                         fundMap.put("topHoldings", fund.getTopHoldings());
+                        fundMap.put("fundMetadata", fund.getFundMetadata()); // Added: missing field
                         enrichedData.add(fundMap);
                     }
                 }
             }
-            
+
             log.info("Returning {} enriched holdings", enrichedData != null ? enrichedData.size() : 0);
 
             return EnrichmentResult.builder()
@@ -116,6 +121,5 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
             throw new RuntimeException("Failed to enrich portfolio data: " + e.getMessage(), e);
         }
     }
-
 
 }

@@ -16,8 +16,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-
 @Service
 @RequiredArgsConstructor
 public class AuthService implements IAuthService {
@@ -27,10 +25,7 @@ public class AuthService implements IAuthService {
     private final JWTUtil jwtUtil;
     private final AuthenticationManager authenticationManager;
 
-    
-
     public AuthResponse register(RegisterRequest request) {
-        
 
         // Check if email already exists
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -57,6 +52,8 @@ public class AuthService implements IAuthService {
                 .accessToken(token)
                 .userId(savedUser.getUserId())
                 .email(savedUser.getEmail())
+                .fullName(savedUser.getFullName())
+                .userType(savedUser.getUserType() != null ? savedUser.getUserType().name() : null)
                 .createdAt(savedUser.getCreatedAt())
                 .build();
     }
@@ -64,8 +61,7 @@ public class AuthService implements IAuthService {
     public AuthResponse login(LoginRequest request) {
         // Authenticate user
         Authentication authentication = authenticationManager.authenticate(
-            new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
+                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
 
         // Get user details
         User user = userRepository.findByEmail(request.getEmail())
@@ -79,9 +75,10 @@ public class AuthService implements IAuthService {
                 .accessToken(token)
                 .userId(user.getUserId())
                 .email(user.getEmail())
-                .createdAt(LocalDateTime.now())
+                .fullName(user.getFullName())
+                .userType(user.getUserType() != null ? user.getUserType().name() : null)
+                .createdAt(user.getCreatedAt()) // Fixed: was LocalDateTime.now()
                 .build();
     }
 
-    
 }

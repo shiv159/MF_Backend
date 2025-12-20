@@ -3,6 +3,8 @@ package com.mutualfunds.api.mutual_fund.service;
 import com.mutualfunds.api.mutual_fund.entity.PortfolioUpload;
 import com.mutualfunds.api.mutual_fund.entity.User;
 import com.mutualfunds.api.mutual_fund.enums.UploadStatus;
+import com.mutualfunds.api.mutual_fund.exception.ResourceNotFoundException;
+import com.mutualfunds.api.mutual_fund.exception.UnauthorizedException;
 import com.mutualfunds.api.mutual_fund.repository.PortfolioUploadRepository;
 import com.mutualfunds.api.mutual_fund.repository.UserRepository;
 import com.mutualfunds.api.mutual_fund.service.contract.IOnboardingService;
@@ -18,7 +20,8 @@ import java.util.UUID;
 
 /**
  * Service for onboarding business operations
- * Handles all repository operations for user profile management and portfolio uploads
+ * Handles all repository operations for user profile management and portfolio
+ * uploads
  * Encapsulates persistence logic from controllers
  */
 @Service
@@ -33,20 +36,20 @@ public class OnboardingService implements IOnboardingService {
      * Get current authenticated user from security context
      * 
      * @return User entity
-     * @throws RuntimeException if user not found
+     * @throws UnauthorizedException if user not authenticated or not found
      */
     @Override
     public User getCurrentUser() {
-        try {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            String email = authentication.getName();
-            log.debug("Getting current user for email: {}", email);
-            return userRepository.findByEmail(email)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-        } catch (Exception e) {
-            log.error("Error getting current user", e);
-            throw e;
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new UnauthorizedException("User not authenticated");
         }
+
+        String email = authentication.getName();
+        log.debug("Found email {} from security context", email);
+
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
     }
 
     /**
@@ -57,61 +60,49 @@ public class OnboardingService implements IOnboardingService {
      */
     @Override
     public User updateRiskProfile(RiskProfileRequest request) {
-        try {
-            User user = getCurrentUser();
-            log.debug("Updating risk profile for user: {}", user.getEmail());
+        User user = getCurrentUser();
+        log.debug("Updating risk profile for user: {}", user.getEmail());
 
-            user.setInvestmentHorizonYears(request.getHorizon());
-            user.setRiskTolerance(request.getRisk());
-            user.setMonthlySipAmount(request.getSip());
-            user.setPrimaryGoal(request.getGoal());
+        user.setInvestmentHorizonYears(request.getHorizon());
+        user.setRiskTolerance(request.getRisk());
+        user.setMonthlySipAmount(request.getSip());
+        user.setPrimaryGoal(request.getGoal());
 
-            User updatedUser = userRepository.save(user);
-            log.info("Risk profile updated successfully for user: {}", user.getEmail());
-            
-            return updatedUser;
-        } catch (Exception e) {
-            log.error("Error updating risk profile", e);
-            throw e;
-        }
+        User updatedUser = userRepository.save(user);
+        log.info("Risk profile updated successfully for user: {}", user.getEmail());
+
+        return updatedUser;
     }
 
     /**
      * Create a new portfolio upload record
      * 
-     * @param userId User ID for the upload
+     * @param userId   User ID for the upload
      * @param fileName Name of the uploaded file
      * @param fileType File type (xlsx, pdf)
      * @param fileSize Size of the file in bytes
      * @return Created PortfolioUpload entity
-     * @throws RuntimeException if user not found
      */
     @Override
     public PortfolioUpload createPortfolioUpload(UUID userId, String fileName, String fileType, long fileSize) {
-        try {
-            log.debug("Creating portfolio upload record for user ID: {}", userId);
+        log.debug("Creating portfolio upload record for user ID: {}", userId);
 
-            User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("User not found"));
-            log.debug("Creating portfolio upload record for user: {}", user.getEmail());
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> ResourceNotFoundException.forResource("User", userId));
 
-            PortfolioUpload upload = PortfolioUpload.builder()
-                    .user(user)
-                    .fileName(fileName)
-                    .fileType(fileType)
-                    .fileSize(fileSize)
-                    .uploadDate(LocalDateTime.now())
-                    .status(UploadStatus.parsing)
-                    .build();
+        PortfolioUpload upload = PortfolioUpload.builder()
+                .user(user)
+                .fileName(fileName)
+                .fileType(fileType)
+                .fileSize(fileSize)
+                .uploadDate(LocalDateTime.now())
+                .status(UploadStatus.parsing)
+                .build();
 
-            PortfolioUpload saved = portfolioUploadRepository.save(upload);
-            log.info("Portfolio upload record created with ID: {}", saved.getUploadId());
-            
-            return saved;
-        } catch (Exception e) {
-            log.error("Error creating portfolio upload", e);
-            throw e;
-        }
+        PortfolioUpload saved = portfolioUploadRepository.save(upload);
+        log.info("Portfolio upload record created with ID: {}", saved.getUploadId());
+
+        return saved;
     }
 
     /**
@@ -119,17 +110,11 @@ public class OnboardingService implements IOnboardingService {
      * 
      * @param uploadId Upload ID to look up
      * @return PortfolioUpload entity
-     * @throws RuntimeException if upload not found
      */
     @Override
     public PortfolioUpload getUploadById(UUID uploadId) {
-        try {
-            log.debug("Retrieving upload for ID: {}", uploadId);
-            return portfolioUploadRepository.findById(uploadId)
-                    .orElseThrow(() -> new RuntimeException("Upload not found"));
-        } catch (Exception e) {
-            log.error("Error retrieving upload for ID: {}", uploadId, e);
-            throw e;
-        }
+        log.debug("Retrieving upload for ID: {}", uploadId);
+        return portfolioUploadRepository.findById(uploadId)
+                .orElseThrow(() -> ResourceNotFoundException.forResource("PortfolioUpload", uploadId));
     }
 }

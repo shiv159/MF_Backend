@@ -70,13 +70,13 @@ public class ETLClient {
                                             request.getUploadId(), 
                                             errorBody);
                                     return Mono.just(EnrichmentResponse.builder()
-                                            .uploadId(request.getUploadId())
+                                            .uploadId(request.getUploadId() != null ? request.getUploadId().toString() : null)
                                             .status("failed")
                                             .errorMessage("ETL error (" + response.statusCode() + "): " + errorBody)
                                             .build());
                                 })
                                 .onErrorResume(e -> Mono.just(EnrichmentResponse.builder()
-                                        .uploadId(request.getUploadId())
+                                        .uploadId(request.getUploadId() != null ? request.getUploadId().toString() : null)
                                         .status("failed")
                                         .errorMessage("ETL error (" + response.statusCode() + "): " + e.getMessage())
                                         .build()));

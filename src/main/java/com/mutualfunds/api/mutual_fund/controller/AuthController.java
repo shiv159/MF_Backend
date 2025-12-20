@@ -8,8 +8,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -23,30 +21,17 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         log.info("User registration attempt for email: {}", request.getEmail());
-        try {
-            AuthResponse response = authService.register(request);
-            log.info("User registration successful for email: {}", request.getEmail());
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("User registration failed for email: {}", request.getEmail(), e);
-            throw e;
-        }
+        AuthResponse response = authService.register(request);
+        log.info("User registration successful for email: {}", request.getEmail());
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         log.info("User login attempt for email: {}", request.getEmail());
-        try {
-            AuthResponse response = authService.login(request);
-            log.info("User login successful for email: {}", request.getEmail());
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("User login failed for email: {}", request.getEmail(), e);
-            throw e;
-        }
+        AuthResponse response = authService.login(request);
+        log.info("User login successful for email: {}", request.getEmail());
+        return ResponseEntity.ok(response);
     }
 
-
-    
-    
 }

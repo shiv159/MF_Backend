@@ -14,5 +14,7 @@ public class AuthResponse {
     private String accessToken;
     private UUID userId;
     private String email;
+    private String fullName; // Added: for UI personalization
+    private String userType; // Added: for frontend routing/logic
     private LocalDateTime createdAt;
 }

@@ -37,84 +37,73 @@ public class OnboardingController {
 
     @PostMapping("/risk-profile")
     public ResponseEntity<RiskProfileResponse> updateRiskProfile(@Valid @RequestBody RiskProfileRequest request) {
-        try {
-            log.info("Processing risk profile update request");
+        log.info("Processing risk profile update request");
 
-            User user = onboardingService.updateRiskProfile(request);
-            log.info("Risk profile updated successfully for user: {}", user.getEmail());
+        User user = onboardingService.updateRiskProfile(request);
+        log.info("Risk profile updated successfully for user: {}", user.getEmail());
 
-            RiskProfileResponse response = new RiskProfileResponse();
-            if (user.getUserType() == UserType.new_investor && recommendationService != null) {
-                log.debug("Generating starter plan for new investor: {}", user.getEmail());
-                StarterPlanDTO plan = recommendationService.generateStarterPlan(user);
-                response.setStarterPlan(plan);
-                log.info("Starter plan generated for user: {}", user.getEmail());
-            } else {
-                response.setNextStep("portfolio_upload");
-                log.info("Existing investor onboarding completed for user: {}", user.getEmail());
-            }
-
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error processing risk profile update", e);
-            throw e;
+        RiskProfileResponse response = new RiskProfileResponse();
+        if (user.getUserType() == UserType.new_investor) {
+            log.debug("Generating starter plan for new investor: {}", user.getEmail());
+            StarterPlanDTO plan = recommendationService.generateStarterPlan(user);
+            response.setStarterPlan(plan);
+        } else {
+            response.setNextStep("portfolio_upload");
         }
+
+        return ResponseEntity.ok(response);
     }
 
     /**
      * Upload portfolio file as MultipartFile
      * Accepts Excel files (.xlsx, .xls)
+     * User ID is extracted from JWT token (authenticated user)
      * 
-     * @param userId User ID for the upload
      * @param file Excel file (MultipartFile)
      * @return UploadResponse with upload ID and status
      */
     @PostMapping("/uploads")
-    public ResponseEntity<UploadResponse> uploadPortfolio(
-            @RequestParam UUID userId,
-            @RequestParam(required = false) String portfolioName,
-            @RequestPart("file") MultipartFile file) {
-        try {
-            log.info("Processing portfolio upload request for user: {} with file: {}", userId, file.getOriginalFilename());
-            
-            // Validate file
-            if (file.isEmpty()) {
-                log.warn("Empty file uploaded");
-                throw new IllegalArgumentException("File cannot be empty");
-            }
-            
-            String filename = file.getOriginalFilename();
-            String fileType = extractFileExtension(filename);
-            
-            // Validate file type (Excel only)
-            if (!isValidExcelFile(fileType)) {
-                log.warn("Invalid file type: {}", fileType);
-                throw new IllegalArgumentException("Only Excel files (.xlsx, .xls) are supported");
-            }
-            
-            // Create portfolio upload record
-            PortfolioUpload saved = onboardingService.createPortfolioUpload(
-                    userId,
-                    filename,
-                    fileType,
-                    file.getSize()
-            );
-            log.info("Portfolio upload record created with ID: {}", saved.getUploadId());
+    public ResponseEntity<UploadResponse> uploadPortfolio(@RequestPart("file") MultipartFile file)
+            throws IOException {
+        // Get authenticated user ID from security context
+        User currentUser = onboardingService.getCurrentUser();
+        UUID userId = currentUser.getUserId();
 
-            // Extract file bytes and start async processing
-            byte[] fileBytes = file.getBytes();
-            uploadProcessingService.processUploadAsync(saved.getUploadId(), fileBytes, fileType);
-            log.info("Async processing started for upload ID: {}", saved.getUploadId());
+        log.info("Processing portfolio upload request for user: {} with file: {}", userId,
+                file.getOriginalFilename());
 
-            return ResponseEntity.ok(new UploadResponse(saved.getUploadId(), saved.getStatus()));
-            
-        } catch (IOException e) {
-            log.error("Error reading file content", e);
-            throw new RuntimeException("Failed to process file: " + e.getMessage(), e);
-        } catch (Exception e) {
-            log.error("Error processing portfolio upload for user: {}", userId, e);
-            throw e;
+        // Validate file
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("File cannot be empty");
         }
+
+        // Validate file size (max 10MB)
+        long maxSize = 10 * 1024 * 1024; // 10MB
+        if (file.getSize() > maxSize) {
+            throw new IllegalArgumentException("File size exceeds 10MB limit");
+        }
+
+        String filename = file.getOriginalFilename();
+        String fileType = extractFileExtension(filename);
+
+        // Validate file type (Excel only)
+        if (!isValidExcelFile(fileType)) {
+            throw new IllegalArgumentException("Only Excel files (.xlsx, .xls) are supported");
+        }
+
+        // Create portfolio upload record
+        PortfolioUpload saved = onboardingService.createPortfolioUpload(
+                userId,
+                filename,
+                fileType,
+                file.getSize());
+
+        // Extract file bytes and start async processing
+        byte[] fileBytes = file.getBytes();
+        uploadProcessingService.processUploadAsync(saved.getUploadId(), fileBytes, fileType);
+
+        return ResponseEntity.ok(
+                new UploadResponse(saved.getUploadId(), saved.getStatus() != null ? saved.getStatus().name() : null));
     }
 
     /**
@@ -129,7 +118,7 @@ public class OnboardingController {
         }
         return filename.substring(filename.lastIndexOf(".") + 1).toLowerCase();
     }
-    
+
     /**
      * Validate if file type is Excel (.xlsx or .xls)
      * 
@@ -142,19 +131,26 @@ public class OnboardingController {
 
     @GetMapping("/uploads/{uploadId}")
     public ResponseEntity<UploadResponse> getUploadStatus(@PathVariable UUID uploadId) {
-        try {
-            log.info("Checking upload status for upload ID: {}", uploadId);
+        log.info("Checking upload status for upload ID: {}", uploadId);
 
-            PortfolioUpload upload = onboardingService.getUploadById(uploadId);
+        // Get authenticated user
+        User currentUser = onboardingService.getCurrentUser();
 
-            UploadResponse response = new UploadResponse();
-            response.setUploadId(upload.getUploadId());
-            response.setStatus(upload.getStatus());
+        // Get upload
+        PortfolioUpload upload = onboardingService.getUploadById(uploadId);
 
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error retrieving upload status for upload ID: {}", uploadId, e);
-            throw e;
+        // Verify ownership
+        if (!upload.getUser().getUserId().equals(currentUser.getUserId())) {
+            log.warn("User {} attempted to access upload {} owned by user {}",
+                    currentUser.getUserId(), uploadId, upload.getUser().getUserId());
+            throw new com.mutualfunds.api.mutual_fund.exception.ForbiddenException(
+                    "Access denied: You can only view your own uploads");
         }
+
+        UploadResponse response = new UploadResponse();
+        response.setUploadId(upload.getUploadId());
+        response.setStatus(upload.getStatus() != null ? upload.getStatus().name() : null);
+
+        return ResponseEntity.ok(response);
     }
 }

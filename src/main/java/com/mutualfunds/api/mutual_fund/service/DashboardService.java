@@ -20,7 +20,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -34,158 +33,169 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DashboardService implements IDashboardService {
 
-    private final UserRepository userRepository;
-    private final UserHoldingRepository userHoldingRepository;
-    private final PortfolioUploadRepository portfolioUploadRepository;
-    private final AIInsightRepository aiInsightRepository;
+        private final UserRepository userRepository;
+        private final UserHoldingRepository userHoldingRepository;
+        private final PortfolioUploadRepository portfolioUploadRepository;
+        private final AIInsightRepository aiInsightRepository;
 
-    @Override
-    public DashboardResponse getDashboardData(UUID userId) {
-        log.info("Fetching dashboard data for user: {}", userId);
+        @Override
+        public DashboardResponse getDashboardData(UUID userId) {
+                log.info("Fetching dashboard data for user: {}", userId);
 
-        // Fetch user
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> {
-                    log.error("User not found with ID: {}", userId);
-                    return new BadRequestException("User not found");
-                });
+                // Fetch user
+                User user = userRepository.findById(userId)
+                                .orElseThrow(() -> {
+                                        log.error("User not found with ID: {}", userId);
+                                        return new BadRequestException("User not found");
+                                });
 
-        // Build user profile DTO
-        UserProfileDTO userProfile = buildUserProfile(user);
+                // Build user profile DTO
+                UserProfileDTO userProfile = buildUserProfile(user);
 
-        // Fetch all holdings for the user
-        List<UserHolding> holdings = userHoldingRepository.findByUserIdWithFund(userId);
-        log.debug("Found {} holdings for user: {}", holdings.size(), userId);
+                // Fetch all holdings for the user
+                List<UserHolding> holdings = userHoldingRepository.findByUserIdWithFund(userId);
+                log.debug("Found {} holdings for user: {}", holdings.size(), userId);
 
-        // Build portfolio summary
-        PortfolioSummaryDTO portfolioSummary = buildPortfolioSummary(holdings);
+                // Build portfolio summary
+                PortfolioSummaryDTO portfolioSummary = buildPortfolioSummary(holdings);
 
-        // Build holdings DTOs
-        List<HoldingDTO> holdingDTOs = holdings.stream()
-                .map(this::buildHoldingDTO)
-                .collect(Collectors.toList());
+                // Build holdings DTOs
+                List<HoldingDTO> holdingDTOs = holdings.stream()
+                                .map(this::buildHoldingDTO)
+                                .collect(Collectors.toList());
 
-        // Fetch upload history
-        List<PortfolioUpload> uploads = portfolioUploadRepository.findByUser_UserId(userId);
-        log.debug("Found {} uploads for user: {}", uploads.size(), userId);
+                // Fetch upload history
+                List<PortfolioUpload> uploads = portfolioUploadRepository.findByUser_UserId(userId);
+                log.debug("Found {} uploads for user: {}", uploads.size(), userId);
 
-        List<UploadHistoryDTO> uploadHistory = uploads.stream()
-                .map(this::buildUploadHistoryDTO)
-                .collect(Collectors.toList());
+                List<UploadHistoryDTO> uploadHistory = uploads.stream()
+                                .map(this::buildUploadHistoryDTO)
+                                .collect(Collectors.toList());
 
-        // Fetch AI insights
-        List<AIInsight> insights = aiInsightRepository.findByUser_UserIdOrderByCreatedAtDesc(userId);
-        log.debug("Found {} AI insights for user: {}", insights.size(), userId);
+                // Fetch AI insights
+                List<AIInsight> insights = aiInsightRepository.findByUser_UserIdOrderByCreatedAtDesc(userId);
+                log.debug("Found {} AI insights for user: {}", insights.size(), userId);
 
-        List<AIInsightDTO> aiInsights = insights.stream()
-                .map(this::buildAIInsightDTO)
-                .collect(Collectors.toList());
+                List<AIInsightDTO> aiInsights = insights.stream()
+                                .map(this::buildAIInsightDTO)
+                                .collect(Collectors.toList());
 
-        log.info("Dashboard data successfully retrieved for user: {}", userId);
+                log.info("Dashboard data successfully retrieved for user: {}", userId);
 
-        return DashboardResponse.builder()
-                .userProfile(userProfile)
-                .portfolioSummary(portfolioSummary)
-                .holdings(holdingDTOs)
-                .uploadHistory(uploadHistory)
-                .aiInsights(aiInsights)
-                .build();
-    }
-
-    private UserProfileDTO buildUserProfile(User user) {
-        return UserProfileDTO.builder()
-                .userId(user.getUserId())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .phone(user.getPhone())
-                .userType(user.getUserType() != null ? user.getUserType().name() : null)
-                .riskTolerance(user.getRiskTolerance() != null ? user.getRiskTolerance().name() : null)
-                .investmentHorizonYears(user.getInvestmentHorizonYears())
-                .monthlySkipAmount(user.getMonthlySipAmount())
-                .primaryGoal(user.getPrimaryGoal())
-                .createdAt(user.getCreatedAt())
-                .build();
-    }
-
-    private PortfolioSummaryDTO buildPortfolioSummary(List<UserHolding> holdings) {
-        Double totalInvestmentAmount = 0.0;
-        Double totalCurrentValue = 0.0;
-        Double totalUnits = 0.0;
-
-        for (UserHolding holding : holdings) {
-            if (holding.getInvestmentAmount() != null) {
-                totalInvestmentAmount += holding.getInvestmentAmount();
-            }
-            if (holding.getCurrentValue() != null) {
-                totalCurrentValue += holding.getCurrentValue();
-            }
-            if (holding.getUnitsHeld() != null) {
-                totalUnits += holding.getUnitsHeld();
-            }
+                return DashboardResponse.builder()
+                                .userProfile(userProfile)
+                                .portfolioSummary(portfolioSummary)
+                                .holdings(holdingDTOs)
+                                .uploadHistory(uploadHistory)
+                                .aiInsights(aiInsights)
+                                .build();
         }
 
-        Double gainLoss = totalCurrentValue - totalInvestmentAmount;
-        Double gainLossPercentage = totalInvestmentAmount > 0
-                ? (gainLoss / totalInvestmentAmount) * 100
-                : 0.0;
+        private UserProfileDTO buildUserProfile(User user) {
+                return UserProfileDTO.builder()
+                                .userId(user.getUserId())
+                                .email(user.getEmail())
+                                .fullName(user.getFullName())
+                                .phone(user.getPhone())
+                                .userType(user.getUserType() != null ? user.getUserType().name() : null)
+                                .riskTolerance(user.getRiskTolerance() != null ? user.getRiskTolerance().name() : null)
+                                .investmentHorizonYears(user.getInvestmentHorizonYears())
+                                .monthlySipAmount(user.getMonthlySipAmount()) // Fixed: was monthlySkipAmount
+                                .primaryGoal(user.getPrimaryGoal())
+                                .isActive(user.getIsActive()) // Added: missing field
+                                .createdAt(user.getCreatedAt())
+                                .updatedAt(user.getUpdatedAt()) // Added: missing field
+                                .build();
+        }
 
-        return PortfolioSummaryDTO.builder()
-                .totalHoldings(holdings.size())
-                .totalInvestmentAmount(totalInvestmentAmount)
-                .totalCurrentValue(totalCurrentValue)
-                .totalUnits(totalUnits)
-                .gainLoss(gainLoss)
-                .gainLossPercentage(gainLossPercentage)
-                .build();
-    }
+        private PortfolioSummaryDTO buildPortfolioSummary(List<UserHolding> holdings) {
+                Double totalInvestmentAmount = 0.0;
+                Double totalCurrentValue = 0.0;
+                Double totalUnits = 0.0;
 
-    private HoldingDTO buildHoldingDTO(UserHolding holding) {
-        Double gainLoss = (holding.getCurrentValue() != null && holding.getInvestmentAmount() != null)
-                ? holding.getCurrentValue() - holding.getInvestmentAmount()
-                : 0.0;
+                for (UserHolding holding : holdings) {
+                        if (holding.getInvestmentAmount() != null) {
+                                totalInvestmentAmount += holding.getInvestmentAmount();
+                        }
+                        if (holding.getCurrentValue() != null) {
+                                totalCurrentValue += holding.getCurrentValue();
+                        }
+                        if (holding.getUnitsHeld() != null) {
+                                totalUnits += holding.getUnitsHeld();
+                        }
+                }
 
-        Double gainLossPercentage = (holding.getInvestmentAmount() != null && holding.getInvestmentAmount() > 0)
-                ? (gainLoss / holding.getInvestmentAmount()) * 100
-                : 0.0;
+                Double gainLoss = totalCurrentValue - totalInvestmentAmount;
+                Double gainLossPercentage = totalInvestmentAmount > 0
+                                ? (gainLoss / totalInvestmentAmount) * 100
+                                : 0.0;
 
-        return HoldingDTO.builder()
-                .holdingId(holding.getUserHoldingId())
-                .fundId(holding.getFund().getFundId())
-                .fundName(holding.getFund().getFundName())
-                .isin(holding.getFund().getIsin())
-                .amcName(holding.getFund().getAmcName())
-                .fundCategory(holding.getFund().getFundCategory())
-                .unitsHeld(holding.getUnitsHeld())
-                .currentNav(holding.getCurrentNav())
-                .investmentAmount(holding.getInvestmentAmount())
-                .currentValue(holding.getCurrentValue())
-                .gainLoss(gainLoss)
-                .gainLossPercentage(gainLossPercentage)
-                .lastNavUpdate(holding.getLastNavUpdate())
-                .build();
-    }
+                return PortfolioSummaryDTO.builder()
+                                .totalHoldings(holdings.size())
+                                .totalInvestmentAmount(totalInvestmentAmount)
+                                .totalCurrentValue(totalCurrentValue)
+                                .totalUnits(totalUnits)
+                                .gainLoss(gainLoss)
+                                .gainLossPercentage(gainLossPercentage)
+                                .build();
+        }
 
-    private UploadHistoryDTO buildUploadHistoryDTO(PortfolioUpload upload) {
-        return UploadHistoryDTO.builder()
-                .uploadId(upload.getUploadId())
-                .fileName(upload.getFileName())
-                .fileType(upload.getFileType())
-                .fileSize(upload.getFileSize())
-                .uploadDate(upload.getUploadDate())
-                .status(upload.getStatus() != null ? upload.getStatus().name() : null)
-                .parsedHoldingsCount(upload.getParsedHoldingsCount())
-                .enrichedFundCount(upload.getEnrichedFundCount())
-                .errorMessage(upload.getErrorMessage())
-                .build();
-    }
+        private HoldingDTO buildHoldingDTO(UserHolding holding) {
+                Double gainLoss = (holding.getCurrentValue() != null && holding.getInvestmentAmount() != null)
+                                ? holding.getCurrentValue() - holding.getInvestmentAmount()
+                                : 0.0;
 
-    private AIInsightDTO buildAIInsightDTO(AIInsight insight) {
-        return AIInsightDTO.builder()
-                .insightId(insight.getInsightId())
-                .question(insight.getQuestion())
-                .aiResponse(insight.getAiResponse())
-                .insightType(insight.getInsightType())
-                .createdAt(insight.getCreatedAt())
-                .build();
-    }
+                Double gainLossPercentage = (holding.getInvestmentAmount() != null && holding.getInvestmentAmount() > 0)
+                                ? (gainLoss / holding.getInvestmentAmount()) * 100
+                                : 0.0;
+
+                return HoldingDTO.builder()
+                                .holdingId(holding.getUserHoldingId())
+                                .fundId(holding.getFund().getFundId())
+                                .fundName(holding.getFund().getFundName())
+                                .isin(holding.getFund().getIsin())
+                                .amcName(holding.getFund().getAmcName())
+                                .fundCategory(holding.getFund().getFundCategory())
+                                .fundType(holding.getFund().getFundType())
+                                .expenseRatio(holding.getFund().getExpenseRatio())
+                                .minSipAmount(holding.getFund().getMinSipAmount())
+                                .directPlan(holding.getFund().getDirectPlan())
+                                .sectorAllocation(holding.getFund().getSectorAllocationJson())
+                                .topHoldings(holding.getFund().getTopHoldingsJson())
+                                .fundMetadata(holding.getFund().getFundMetadataJson())
+                                .unitsHeld(holding.getUnitsHeld())
+                                .currentNav(holding.getCurrentNav())
+                                .navAsOf(holding.getFund().getNavAsOf())
+                                .investmentAmount(holding.getInvestmentAmount())
+                                .currentValue(holding.getCurrentValue())
+                                .gainLoss(gainLoss)
+                                .gainLossPercentage(gainLossPercentage)
+                                .purchaseDate(holding.getPurchaseDate())
+                                .lastNavUpdate(holding.getLastNavUpdate())
+                                .build();
+        }
+
+        private UploadHistoryDTO buildUploadHistoryDTO(PortfolioUpload upload) {
+                return UploadHistoryDTO.builder()
+                                .uploadId(upload.getUploadId())
+                                .fileName(upload.getFileName())
+                                .fileType(upload.getFileType())
+                                .fileSize(upload.getFileSize())
+                                .uploadDate(upload.getUploadDate())
+                                .status(upload.getStatus() != null ? upload.getStatus().name() : null)
+                                .parsedHoldingsCount(upload.getParsedHoldingsCount())
+                                .enrichedFundCount(upload.getEnrichedFundCount())
+                                .errorMessage(upload.getErrorMessage())
+                                .build();
+        }
+
+        private AIInsightDTO buildAIInsightDTO(AIInsight insight) {
+                return AIInsightDTO.builder()
+                                .insightId(insight.getInsightId())
+                                .question(insight.getQuestion())
+                                .aiResponse(insight.getAiResponse())
+                                .insightType(insight.getInsightType())
+                                .createdAt(insight.getCreatedAt())
+                                .build();
+        }
 }

@@ -37,8 +37,10 @@ public class HoldingsPersistenceService {
     /**
      * Persist enriched holdings data to the database
      * For each enriched record:
-     * 1. Find or create the Fund based on ISIN with enriched fund data (AMC, category, NAV, etc.)
-     * 2. Create or update UserHolding linking user to fund with holdings data (units, value, etc.)
+     * 1. Find or create the Fund based on ISIN with enriched fund data (AMC,
+     * category, NAV, etc.)
+     * 2. Create or update UserHolding linking user to fund with holdings data
+     * (units, value, etc.)
      *
      * @param enrichedData List of enriched holding records from ETL service
      * @param userId       User ID to associate holdings with
@@ -47,12 +49,12 @@ public class HoldingsPersistenceService {
     @Transactional
     public Integer persistEnrichedHoldings(List<Map<String, Object>> enrichedData, UUID userId) {
         log.info("Starting to persist {} enriched holdings for user ID: {}", enrichedData.size(), userId);
-        
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
-        
+
         int successCount = 0;
-        
+
         for (Map<String, Object> holding : enrichedData) {
             try {
                 // Extract Fund Master Data from enriched record (ETL response)
@@ -65,30 +67,41 @@ public class HoldingsPersistenceService {
                 LocalDate navAsOf = extractLocalDate(holding, "navAsOf");
                 JsonNode sectorAllocation = extractJsonNode(holding, "sectorAllocation");
                 JsonNode topHoldings = extractJsonNode(holding, "topHoldings");
-                
+                JsonNode fundMetadata = extractJsonNode(holding, "fundMetadata");
+
                 // Extract User Holdings Data
                 Double units = extractDouble(holding, "units");
                 Double nav = extractDouble(holding, "nav");
                 Double value = extractDouble(holding, "value");
                 Date purchaseDate = extractDate(holding, "purchaseDate");
-                
+
                 // Validate required fields
                 if (isin == null || fundName == null) {
                     log.warn("Skipping holding with invalid data. ISIN: {}, FundName: {}", isin, fundName);
                     continue;
                 }
-                
+
                 // Find or create Fund with enriched data
                 Fund fund = fundRepository.findByIsin(isin)
                         .map(existingFund -> {
                             // Update existing fund with enriched data
-                            if (amcName != null) existingFund.setAmcName(amcName);
-                            if (fundCategory != null) existingFund.setFundCategory(fundCategory);
-                            if (expenseRatio != null) existingFund.setExpenseRatio(expenseRatio);
-                            if (currentNav != null) existingFund.setCurrentNav(currentNav);
-                            if (navAsOf != null) existingFund.setNavAsOf(java.sql.Date.valueOf(navAsOf));
-                            if (sectorAllocation != null) existingFund.setSectorAllocationJson(sectorAllocation);
-                            if (topHoldings != null) existingFund.setTopHoldingsJson(topHoldings);
+                            if (amcName != null)
+                                existingFund.setAmcName(amcName);
+                            if (fundCategory != null)
+                                existingFund.setFundCategory(fundCategory);
+                            if (expenseRatio != null)
+                                existingFund.setExpenseRatio(expenseRatio);
+                            if (currentNav != null)
+                                existingFund.setCurrentNav(currentNav);
+                            if (navAsOf != null)
+                                if (navAsOf != null)
+                                    existingFund.setNavAsOf(java.sql.Date.valueOf(navAsOf));
+                            if (sectorAllocation != null)
+                                existingFund.setSectorAllocationJson(sectorAllocation);
+                            if (topHoldings != null)
+                                existingFund.setTopHoldingsJson(topHoldings);
+                            if (fundMetadata != null)
+                                existingFund.setFundMetadataJson(fundMetadata);
                             log.debug("Updating existing fund with ISIN: {} with enriched data", isin);
                             return fundRepository.save(existingFund);
                         })
@@ -104,51 +117,56 @@ public class HoldingsPersistenceService {
                                     .navAsOf(navAsOf != null ? java.sql.Date.valueOf(navAsOf) : null)
                                     .sectorAllocationJson(sectorAllocation)
                                     .topHoldingsJson(topHoldings)
+                                    .fundMetadataJson(fundMetadata)
                                     .directPlan(true)
                                     .build();
-                            log.debug("Creating new fund with ISIN: {}, name: {}, AMC: {}, category: {}", 
+                            log.debug("Creating new fund with ISIN: {}, name: {}, AMC: {}, category: {}",
                                     isin, fundName, amcName, fundCategory);
                             return fundRepository.save(newFund);
                         });
-                
+
                 // Find or create UserHolding
-                Optional<UserHolding> existingHolding = userHoldingRepository.findByUser_UserIdAndFund_FundId(userId, fund.getFundId());
-                
+                Optional<UserHolding> existingHolding = userHoldingRepository.findByUser_UserIdAndFund_FundId(userId,
+                        fund.getFundId());
+
                 UserHolding userHolding = existingHolding.orElseGet(UserHolding::new);
                 userHolding.setUser(user);
                 userHolding.setFund(fund);
                 userHolding.setUnitsHeld(units);
                 userHolding.setCurrentNav(currentNav);
-                userHolding.setInvestmentAmount(value);  // Mapped from 'value' in ETL response
-                userHolding.setCurrentValue(value);      // Calculated as units * currentNav
+                userHolding.setInvestmentAmount(value); // Mapped from 'value' in ETL response
+                userHolding.setCurrentValue(value); // Calculated as units * currentNav
                 userHolding.setPurchaseDate(purchaseDate);
-                
+
                 userHoldingRepository.save(userHolding);
                 successCount++;
-                log.debug("Persisted holding for user: {}, fund ISIN: {}, units: {}, value: {}", 
+                log.debug("Persisted holding for user: {}, fund ISIN: {}, units: {}, value: {}",
                         userId, isin, units, value);
-                
+
             } catch (Exception e) {
                 log.error("Failed to persist holding for user {}: {}", userId, holding, e);
             }
         }
-        
-        log.info("Successfully persisted {} out of {} enriched holdings for user ID: {}", 
+
+        log.info("Successfully persisted {} out of {} enriched holdings for user ID: {}",
                 successCount, enrichedData.size(), userId);
         return successCount;
     }
-    
+
     // Helper methods for type-safe extraction
     private String extractString(Map<String, Object> map, String key) {
         Object value = map.get(key);
         return value != null ? value.toString() : null;
     }
-    
+
     private Double extractDouble(Map<String, Object> map, String key) {
         Object value = map.get(key);
-        if (value == null) return null;
-        if (value instanceof Double) return (Double) value;
-        if (value instanceof Number) return ((Number) value).doubleValue();
+        if (value == null)
+            return null;
+        if (value instanceof Double)
+            return (Double) value;
+        if (value instanceof Number)
+            return ((Number) value).doubleValue();
         try {
             return Double.parseDouble(value.toString());
         } catch (NumberFormatException e) {
@@ -156,12 +174,15 @@ public class HoldingsPersistenceService {
             return null;
         }
     }
-    
+
     private Date extractDate(Map<String, Object> map, String key) {
         Object value = map.get(key);
-        if (value == null) return null;
-        if (value instanceof Date) return (Date) value;
-        if (value instanceof java.util.Date) return new Date(((java.util.Date) value).getTime());
+        if (value == null)
+            return null;
+        if (value instanceof Date)
+            return (Date) value;
+        if (value instanceof java.util.Date)
+            return new Date(((java.util.Date) value).getTime());
         if (value instanceof String) {
             try {
                 return Date.valueOf((String) value);
@@ -172,27 +193,50 @@ public class HoldingsPersistenceService {
         }
         return null;
     }
-    
+
     private LocalDate extractLocalDate(Map<String, Object> map, String key) {
         Object value = map.get(key);
-        if (value == null) return null;
-        if (value instanceof LocalDate) return (LocalDate) value;
-        if (value instanceof java.util.Date) return ((java.util.Date) value).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+        if (value == null)
+            return null;
+        if (value instanceof LocalDate)
+            return (LocalDate) value;
+        if (value instanceof java.util.Date)
+            return ((java.util.Date) value).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
         if (value instanceof String) {
+            String s = (String) value;
+            // Try ISO (yyyy-MM-dd)
             try {
-                return LocalDate.parse((String) value);
-            } catch (Exception e) {
-                log.warn("Failed to parse LocalDate value for key '{}': {}", key, value);
-                return null;
+                return LocalDate.parse(s);
+            } catch (Exception ignored) {
             }
+            // Try common day-first format (dd-MM-yyyy) as used by ETL
+            try {
+                java.time.format.DateTimeFormatter dtf = java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy");
+                return LocalDate.parse(s, dtf);
+            } catch (Exception ignored) {
+            }
+            // Try ISO date-time formats
+            try {
+                return java.time.OffsetDateTime.parse(s).toLocalDate();
+            } catch (Exception ignored) {
+            }
+            try {
+                return java.time.LocalDateTime.parse(s).toLocalDate();
+            } catch (Exception ignored) {
+            }
+
+            log.warn("Failed to parse LocalDate value for key '{}': {}", key, value);
+            return null;
         }
         return null;
     }
-    
+
     private JsonNode extractJsonNode(Map<String, Object> map, String key) {
         Object value = map.get(key);
-        if (value == null) return null;
-        if (value instanceof JsonNode) return (JsonNode) value;
+        if (value == null)
+            return null;
+        if (value instanceof JsonNode)
+            return (JsonNode) value;
         try {
             return objectMapper.valueToTree(value);
         } catch (Exception e) {

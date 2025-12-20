@@ -11,26 +11,28 @@ import reactor.core.publisher.Mono;
 
 /**
  * ETL service integration component
- * Uses WebClient (async/reactive) to call Python FastAPI service for enriching portfolio holdings
+ * Uses WebClient (async/reactive) to call Python FastAPI service for enriching
+ * portfolio holdings
  * Bridges Spring Boot application with external Python ETL microservice
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class ETLIntegrationImpl implements IETLIntegration {
-    
+
     private final WebClient webClient;
-    
+
     @Value("${etl.service.url:http://localhost:8081}")
     private String etlServiceUrl;
-    
+
     @Value("${etl.enrich.endpoint:/etl/enrich}")
     private String enrichEndpoint;
-    
+
     /**
      * Send parsed holdings to Python ETL for enrichment (async/reactive)
      * Spring Boot already parsed the PDF/Excel
-     * Python ETL will enrich with fund master data (ISIN, AMC, category, sectors, etc.)
+     * Python ETL will enrich with fund master data (ISIN, AMC, category, sectors,
+     * etc.)
      * 
      * @param request Parsed holdings + upload metadata
      * @return Mono containing enriched funds ready for database insertion
@@ -38,24 +40,12 @@ public class ETLIntegrationImpl implements IETLIntegration {
     @Override
     public Mono<EnrichmentResponse> enrichHoldingsAsync(EnrichmentRequest request) {
         String url = etlServiceUrl + enrichEndpoint;
-        log.info("Calling Python ETL service for enrichment (async): {} with {} holdings", 
+        log.info("Calling Python ETL service for enrichment (async): {} with {} holdings",
                 url, request.getParsedHoldings().size());
-        log.debug("Enrichment request details: uploadId={}, userId={}", 
+        log.debug("Enrichment request details: uploadId={}, userId={}",
                 request.getUploadId(), request.getUserId());
         log.debug("Enrichment request full payload: {}", request);
 
-        // Create sample ParsedHoldingEntry (for testing against real ETL service)
-        // List<ParsedHoldingEntry> parsedHoldings = new ArrayList<>();
-        // ParsedHoldingEntry holding = ParsedHoldingEntry.builder()
-        //         .fundName("Motilal Oswal Midcap Fund Direct Growth")
-        //         .units(150.45)
-        //         .nav(90.5)
-        //         .value(223495.48)
-        //         .purchaseDate("2020-06-15")
-        //         .build();
-        // parsedHoldings.add(holding);
-        // request.setParsedHoldings(parsedHoldings);
-        
         return webClient
                 .post()
                 .uri(url)
@@ -67,36 +57,42 @@ public class ETLIntegrationImpl implements IETLIntegration {
                                     if (body != null && "completed".equalsIgnoreCase(body.getStatus())) {
                                         log.info("Enrichment completed for upload {}: {} funds enriched, {} failed",
                                                 request.getUploadId(),
-                                                body.getEnrichmentQuality() != null ? body.getEnrichmentQuality().getSuccessfullyEnriched() : 0,
-                                                body.getEnrichmentQuality() != null ? body.getEnrichmentQuality().getFailedToEnrich() : 0);
+                                                body.getEnrichmentQuality() != null
+                                                        ? body.getEnrichmentQuality().getSuccessfullyEnriched()
+                                                        : 0,
+                                                body.getEnrichmentQuality() != null
+                                                        ? body.getEnrichmentQuality().getFailedToEnrich()
+                                                        : 0);
                                     } else {
-                                        log.error("Enrichment failed for upload {}: {}", 
-                                                request.getUploadId(), 
+                                        log.error("Enrichment failed for upload {}: {}",
+                                                request.getUploadId(),
                                                 body != null ? body.getErrorMessage() : "No response from ETL");
                                     }
                                 });
                     } else {
                         return response.bodyToMono(String.class)
                                 .flatMap(errorBody -> {
-                                    log.error("ETL service returned status {} for upload {}. Error body: {}", 
-                                            response.statusCode(), 
-                                            request.getUploadId(), 
+                                    log.error("ETL service returned status {} for upload {}. Error body: {}",
+                                            response.statusCode(),
+                                            request.getUploadId(),
                                             errorBody);
                                     return Mono.just(EnrichmentResponse.builder()
-                                            .uploadId(request.getUploadId())
+                                            .uploadId(request.getUploadId() != null ? request.getUploadId().toString()
+                                                    : null)
                                             .status("failed")
                                             .errorMessage("ETL error (" + response.statusCode() + "): " + errorBody)
                                             .build());
                                 })
                                 .onErrorResume(e -> Mono.just(EnrichmentResponse.builder()
-                                        .uploadId(request.getUploadId())
+                                        .uploadId(
+                                                request.getUploadId() != null ? request.getUploadId().toString() : null)
                                         .status("failed")
                                         .errorMessage("ETL error (" + response.statusCode() + "): " + e.getMessage())
                                         .build()));
                     }
                 });
     }
-    
+
     /**
      * Blocking wrapper for synchronous callers
      * Converts async Mono result to blocking call
