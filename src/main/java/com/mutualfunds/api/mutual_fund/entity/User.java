@@ -9,6 +9,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import com.fasterxml.jackson.databind.JsonNode;
+import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
+import org.hibernate.annotations.Type;
 
 @Entity
 @Table(name = "users")
@@ -63,4 +66,8 @@ public class User {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Type(JsonBinaryType.class)
+    @Column(name = "profile_data_json", columnDefinition = "jsonb")
+    private JsonNode profileDataJson;
 }

@@ -105,7 +105,7 @@
                         "header": [],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n    \"investmentHorizon\": 5,\n    \"riskTolerance\": \"moderate\",\n    \"monthlyInvestment\": 10000.0,\n    \"primaryGoal\": \"Retirement\"\n}",
+                            "raw": "{\n  \"demographics\": {\n    \"age\": 30,\n    \"incomeRange\": \"15L-25L\",\n    \"dependents\": 1\n  },\n  \"financials\": {\n    \"emergencyFundMonths\": 6,\n    \"existingEmiForLoans\": 15000,\n    \"financialKnowledge\": \"INTERMEDIATE\",\n    \"monthlyInvestmentAmount\": 10000\n  },\n  \"behavioral\": {\n    \"marketDropReaction\": \"BUY_MORE\",\n    \"investmentPeriodExperience\": \"3-5_YEARS\"\n  },\n  \"goals\": {\n    \"primaryGoal\": \"RETIREMENT\",\n    \"timeHorizonYears\": 20,\n    \"targetAmount\": 10000000\n  },\n  \"preferences\": {\n    \"preferredInvestmentStyle\": \"PASSIVE\",\n    \"taxSavingNeeded\": false\n  }\n}",
                             "options": {
                                 "raw": {
                                     "language": "json"

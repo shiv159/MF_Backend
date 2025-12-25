@@ -52,11 +52,9 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
                     .build();
 
             log.debug("Sending {} holdings to ETL service for enrichment", enrichmentData.size());
-            log.debug("Enrichment request full payload: {}", request);
 
             // Call ETL service
             EnrichmentResponse response = etlIntegration.enrichHoldings(request);
-            log.debug("ETL service response: {}", response);
 
             if (response == null) {
                 log.error("ETL service returned null response");

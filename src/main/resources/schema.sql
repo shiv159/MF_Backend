@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
     monthly_sip_amount DECIMAL(15,2),
     primary_goal VARCHAR(255),
     is_active BOOLEAN DEFAULT TRUE,
+    profile_data_json JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS funds (
     direct_plan BOOLEAN DEFAULT TRUE,
     sector_allocation_json JSONB,
     top_holdings_json JSONB,
+    fund_metadata_json JSONB,
     current_nav DECIMAL(10,4),
     nav_as_of DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

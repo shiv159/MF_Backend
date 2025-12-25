@@ -1,13 +1,12 @@
 package com.mutualfunds.api.mutual_fund.controller;
 
-import com.mutualfunds.api.mutual_fund.dto.request.RiskProfileRequest;
-import com.mutualfunds.api.mutual_fund.dto.response.RiskProfileResponse;
-import com.mutualfunds.api.mutual_fund.dto.response.StarterPlanDTO;
+import com.mutualfunds.api.mutual_fund.dto.risk.RiskProfileRequest;
+import com.mutualfunds.api.mutual_fund.dto.risk.RiskProfileResponse;
 import com.mutualfunds.api.mutual_fund.dto.response.UploadResponse;
+import com.mutualfunds.api.mutual_fund.service.risk.IRiskProfilingService;
+import com.mutualfunds.api.mutual_fund.service.risk.RiskRecommendationService;
 import com.mutualfunds.api.mutual_fund.entity.PortfolioUpload;
 import com.mutualfunds.api.mutual_fund.entity.User;
-import com.mutualfunds.api.mutual_fund.enums.UserType;
-import com.mutualfunds.api.mutual_fund.service.contract.IRecommendationService;
 import com.mutualfunds.api.mutual_fund.service.contract.IUploadProcessingService;
 import com.mutualfunds.api.mutual_fund.service.contract.IOnboardingService;
 import jakarta.validation.Valid;
@@ -32,24 +31,25 @@ import java.util.UUID;
 public class OnboardingController {
 
     private final IOnboardingService onboardingService;
-    private final IRecommendationService recommendationService;
     private final IUploadProcessingService uploadProcessingService;
+    private final IRiskProfilingService riskProfilingService;
+    private final RiskRecommendationService riskRecommendationService;
 
     @PostMapping("/risk-profile")
     public ResponseEntity<RiskProfileResponse> updateRiskProfile(@Valid @RequestBody RiskProfileRequest request) {
-        log.info("Processing risk profile update request");
+        log.info("Processing enhanced risk profile update request");
 
-        User user = onboardingService.updateRiskProfile(request);
-        log.info("Risk profile updated successfully for user: {}", user.getEmail());
+        // 1. Update Profile (Overwrite mode)
+        User user = riskProfilingService.updateRiskProfile(request);
+        log.info("Risk profile updated for user: {}", user.getEmail());
 
-        RiskProfileResponse response = new RiskProfileResponse();
-        if (user.getUserType() == UserType.new_investor) {
-            log.debug("Generating starter plan for new investor: {}", user.getEmail());
-            StarterPlanDTO plan = recommendationService.generateStarterPlan(user);
-            response.setStarterPlan(plan);
-        } else {
-            response.setNextStep("portfolio_upload");
-        }
+        // 2. Generate Recommendation
+        RiskProfileResponse response = riskRecommendationService.generateRecommendation(user);
+
+        // Note: Logic for 'portfolio_upload' next step is preserved implicit logic if
+        // needed,
+        // but current response structure focuses on recommendation.
+        // If strict NextStep needed, we can add it to RiskProfileResponse DTO later.
 
         return ResponseEntity.ok(response);
     }

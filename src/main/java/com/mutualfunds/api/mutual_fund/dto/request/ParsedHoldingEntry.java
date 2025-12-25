@@ -6,7 +6,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.DecimalMin;
 
 /**
@@ -25,7 +24,6 @@ public class ParsedHoldingEntry {
     @JsonProperty("fund_name")
     private String fundName;
     
-    @NotNull(message = "Units is required")
     @DecimalMin(value = "0.0", inclusive = false, message = "Units must be greater than 0")
     @JsonProperty("units")
     private Double units;
