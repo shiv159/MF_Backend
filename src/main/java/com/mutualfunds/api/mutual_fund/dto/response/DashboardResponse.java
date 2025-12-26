@@ -61,6 +61,7 @@ public class DashboardResponse {
         private UUID holdingId;
         private UUID fundId;
         private String fundName;
+        private Integer weightPct;
         private String isin;
         private String amcName;
         private String fundCategory;

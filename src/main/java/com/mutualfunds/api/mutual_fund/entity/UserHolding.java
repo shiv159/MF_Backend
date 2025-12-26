@@ -45,6 +45,9 @@ public class UserHolding {
     @Column(name = "current_value")
     private Double currentValue;
 
+    @Column(name = "weight_pct")
+    private Integer weightPct;
+
     @Column(name = "purchase_date")
     private java.sql.Date purchaseDate;
 

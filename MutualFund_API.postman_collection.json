@@ -245,12 +245,114 @@
                     "response": []
                 }
             ]
+        },
+        {
+            "name": "Manual Selection",
+            "item": [
+                {
+                    "name": "Search Funds (Catalog)",
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{access_token}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/funds?query={{fund_query}}&limit={{fund_limit}}",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "funds"
+                            ],
+                            "query": [
+                                {
+                                    "key": "query",
+                                    "value": "{{fund_query}}"
+                                },
+                                {
+                                    "key": "limit",
+                                    "value": "{{fund_limit}}"
+                                }
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Replace Holdings (Manual Selection)",
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{access_token}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"selections\": [\n    {\n      \"fundId\": \"{{fund_id_1}}\",\n      \"weightPct\": 60\n    },\n    {\n      \"fundName\": \"{{fund_name_2}}\",\n      \"weightPct\": 40\n    }\n  ]\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/portfolio/manual-selection",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "portfolio",
+                                "manual-selection"
+                            ]
+                        }
+                    },
+                    "response": []
+                }
+            ]
         }
     ],
     "variable": [
         {
             "key": "base_url",
             "value": "http://localhost:8080"
+        },
+        {
+            "key": "fund_query",
+            "value": ""
+        },
+        {
+            "key": "fund_limit",
+            "value": "20"
+        },
+        {
+            "key": "fund_id_1",
+            "value": ""
+        },
+        {
+            "key": "fund_name_2",
+            "value": "HDFC Mid-Cap Opportunities Fund"
         }
     ]
 }

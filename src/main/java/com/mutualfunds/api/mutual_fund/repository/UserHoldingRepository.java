@@ -17,4 +17,6 @@ public interface UserHoldingRepository extends JpaRepository<UserHolding, UUID> 
 
     @Query("SELECT uh FROM UserHolding uh JOIN FETCH uh.fund WHERE uh.user.userId = :userId")
     List<UserHolding> findByUserIdWithFund(@Param("userId") UUID userId);
+
+    void deleteByUser_UserId(UUID userId);
 }

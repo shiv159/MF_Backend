@@ -153,6 +153,7 @@ public class DashboardService implements IDashboardService {
                                 .holdingId(holding.getUserHoldingId())
                                 .fundId(holding.getFund().getFundId())
                                 .fundName(holding.getFund().getFundName())
+                                .weightPct(holding.getWeightPct())
                                 .isin(holding.getFund().getIsin())
                                 .amcName(holding.getFund().getAmcName())
                                 .fundCategory(holding.getFund().getFundCategory())

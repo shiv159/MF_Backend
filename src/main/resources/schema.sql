@@ -49,11 +49,16 @@ CREATE TABLE IF NOT EXISTS user_holdings (
     current_nav DECIMAL(10,4),
     investment_amount DECIMAL(15,2),
     current_value DECIMAL(15,2),
+    weight_pct INTEGER CHECK (weight_pct >= 1 AND weight_pct <= 100),
     purchase_date DATE,
     last_nav_update TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (user_id, fund_id)
 );
+
+-- Backfill / safe evolution: add column if the table already exists
+ALTER TABLE IF EXISTS user_holdings
+    ADD COLUMN IF NOT EXISTS weight_pct INTEGER CHECK (weight_pct >= 1 AND weight_pct <= 100);
 
 -- Portfolio Uploads table
 CREATE TABLE IF NOT EXISTS portfolio_uploads (
