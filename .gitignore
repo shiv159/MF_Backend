@@ -34,6 +34,5 @@ build/
 pg-296ad27f.session.sql
 /context
 logs/mutual-fund-app.log
-src/main/resources/application.properties
 /logs
 *.log
