@@ -103,17 +103,7 @@ jobs:
             --set-env-vars "SPRING_DATASOURCE_URL=${{ secrets.DB_URL }}" \
             --set-env-vars "SPRING_DATASOURCE_USERNAME=${{ secrets.DB_USERNAME }}" \
             --set-env-vars "SPRING_DATASOURCE_PASSWORD=${{ secrets.DB_PASSWORD }}" \
-            --startup-cpu-boost \
-            --cpu-throttling \
-            --startup-probe-path "/actuator/health/liveness" \
-            --startup-probe-initial-delay 10 \
-            --startup-probe-timeout 3 \
-            --startup-probe-period 10 \
-            --startup-probe-failure-threshold 3 \
-            --liveness-probe-path "/actuator/health/readiness" \
-            --liveness-probe-initial-delay 30 \
-            --liveness-probe-timeout 3 \
-            --liveness-probe-period 30 \
+            --cpu-boost \
             --quiet
 
       # ============================================
