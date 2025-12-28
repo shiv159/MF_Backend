@@ -38,6 +38,7 @@ public class ManualSelectionService implements IManualSelectionService {
     private final UserHoldingRepository userHoldingRepository;
     private final ETLEnrichmentService etlEnrichmentService;
     private final ObjectMapper objectMapper;
+    private final com.mutualfunds.api.mutual_fund.service.risk.PortfolioAnalyzerService portfolioAnalyzerService;
 
     @Override
     @Transactional
@@ -82,7 +83,7 @@ public class ManualSelectionService implements IManualSelectionService {
                 results.add(ManualSelectionResult.builder()
                         .inputFundId(null)
                         .inputFundName(item.getFundName())
-                    .status(STATUS_ENRICHED_FROM_ETL)
+                        .status(STATUS_ENRICHED_FROM_ETL)
                         .message("Resolved via ETL")
                         .build());
             }
@@ -127,7 +128,8 @@ public class ManualSelectionService implements IManualSelectionService {
         userHoldingRepository.deleteByUser_UserId(userId);
 
         // Ensure deletes are executed before the following batch insert.
-        // Without this, Hibernate may order INSERTs before DELETEs within the same transaction,
+        // Without this, Hibernate may order INSERTs before DELETEs within the same
+        // transaction,
         // causing (user_id, fund_id) unique constraint violations.
         userHoldingRepository.flush();
 
@@ -152,9 +154,19 @@ public class ManualSelectionService implements IManualSelectionService {
 
         ManualSelectionPortfolio portfolio = buildPortfolioResponse(newHoldings);
 
+        // 5) Perform Portfolio Analysis
+        List<Fund> analyzedFunds = newHoldings.stream().map(UserHolding::getFund).collect(Collectors.toList());
+        Map<UUID, Double> weights = newHoldings.stream()
+                .collect(Collectors.toMap(
+                        h -> h.getFund().getFundId(),
+                        h -> h.getWeightPct() / 100.0));
+
+        var analysis = portfolioAnalyzerService.analyzePortfolio(analyzedFunds, weights);
+
         return ManualSelectionResponse.builder()
                 .results(results)
                 .portfolio(portfolio)
+                .analysis(analysis)
                 .build();
     }
 
@@ -183,7 +195,8 @@ public class ManualSelectionService implements IManualSelectionService {
         }
     }
 
-    private record FundUpsertOutcome(Fund fund, boolean created) {}
+    private record FundUpsertOutcome(Fund fund, boolean created) {
+    }
 
     private FundUpsertOutcome upsertFundFromEtl(Map<String, Object> holding) {
         String isin = extractString(holding, "isin");
@@ -204,17 +217,25 @@ public class ManualSelectionService implements IManualSelectionService {
         Optional<Fund> existing = fundRepository.findByIsin(isin);
         if (existing.isPresent()) {
             Fund existingFund = existing.get();
-                    if (amcName != null) existingFund.setAmcName(amcName);
-                    if (fundCategory != null) existingFund.setFundCategory(fundCategory);
-                    if (expenseRatio != null) existingFund.setExpenseRatio(expenseRatio);
-                    if (currentNav != null) existingFund.setCurrentNav(currentNav);
-                    if (navAsOf != null) existingFund.setNavAsOf(java.sql.Date.valueOf(navAsOf));
-                    if (sectorAllocation != null) existingFund.setSectorAllocationJson(sectorAllocation);
-                    if (topHoldings != null) existingFund.setTopHoldingsJson(topHoldings);
-                    if (fundMetadata != null) existingFund.setFundMetadataJson(fundMetadata);
-                    if (existingFund.getFundName() == null || existingFund.getFundName().isBlank()) {
-                        existingFund.setFundName(fundName);
-                    }
+            if (amcName != null)
+                existingFund.setAmcName(amcName);
+            if (fundCategory != null)
+                existingFund.setFundCategory(fundCategory);
+            if (expenseRatio != null)
+                existingFund.setExpenseRatio(expenseRatio);
+            if (currentNav != null)
+                existingFund.setCurrentNav(currentNav);
+            if (navAsOf != null)
+                existingFund.setNavAsOf(java.sql.Date.valueOf(navAsOf));
+            if (sectorAllocation != null)
+                existingFund.setSectorAllocationJson(sectorAllocation);
+            if (topHoldings != null)
+                existingFund.setTopHoldingsJson(topHoldings);
+            if (fundMetadata != null)
+                existingFund.setFundMetadataJson(fundMetadata);
+            if (existingFund.getFundName() == null || existingFund.getFundName().isBlank()) {
+                existingFund.setFundName(fundName);
+            }
 
             return new FundUpsertOutcome(fundRepository.save(existingFund), false);
         }
@@ -236,32 +257,32 @@ public class ManualSelectionService implements IManualSelectionService {
         return new FundUpsertOutcome(created, true);
     }
 
-        private ManualSelectionPortfolio buildPortfolioResponse(List<UserHolding> userHoldings) {
+    private ManualSelectionPortfolio buildPortfolioResponse(List<UserHolding> userHoldings) {
         List<ManualSelectionHolding> holdings = userHoldings.stream()
-            .map(uh -> {
-                Fund f = uh.getFund();
-                return ManualSelectionHolding.builder()
-                    .fundId(f.getFundId())
-                    .fundName(f.getFundName())
-                    .isin(f.getIsin())
-                    .amcName(f.getAmcName())
-                    .fundCategory(f.getFundCategory())
-                    .directPlan(f.getDirectPlan())
-                    .currentNav(f.getCurrentNav())
-                    .navAsOf(f.getNavAsOf())
-                    .weightPct(uh.getWeightPct())
-                    .sectorAllocation(f.getSectorAllocationJson())
-                    .topHoldings(f.getTopHoldingsJson())
-                    .fundMetadata(f.getFundMetadataJson())
-                    .build();
-            })
-            .collect(Collectors.toList());
+                .map(uh -> {
+                    Fund f = uh.getFund();
+                    return ManualSelectionHolding.builder()
+                            .fundId(f.getFundId())
+                            .fundName(f.getFundName())
+                            .isin(f.getIsin())
+                            .amcName(f.getAmcName())
+                            .fundCategory(f.getFundCategory())
+                            .directPlan(f.getDirectPlan())
+                            .currentNav(f.getCurrentNav())
+                            .navAsOf(f.getNavAsOf())
+                            .weightPct(uh.getWeightPct())
+                            .sectorAllocation(f.getSectorAllocationJson())
+                            .topHoldings(f.getTopHoldingsJson())
+                            .fundMetadata(f.getFundMetadataJson())
+                            .build();
+                })
+                .collect(Collectors.toList());
 
         int totalWeight = userHoldings.stream()
-            .map(UserHolding::getWeightPct)
-            .filter(Objects::nonNull)
-            .mapToInt(Integer::intValue)
-            .sum();
+                .map(UserHolding::getWeightPct)
+                .filter(Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .sum();
 
         return ManualSelectionPortfolio.builder()
                 .summary(ManualSelectionPortfolioSummary.builder()
@@ -279,9 +300,12 @@ public class ManualSelectionService implements IManualSelectionService {
 
     private Double extractDouble(Map<String, Object> map, String key) {
         Object value = map.get(key);
-        if (value == null) return null;
-        if (value instanceof Double) return (Double) value;
-        if (value instanceof Number) return ((Number) value).doubleValue();
+        if (value == null)
+            return null;
+        if (value instanceof Double)
+            return (Double) value;
+        if (value instanceof Number)
+            return ((Number) value).doubleValue();
         try {
             return Double.parseDouble(value.toString());
         } catch (NumberFormatException e) {
@@ -291,8 +315,10 @@ public class ManualSelectionService implements IManualSelectionService {
 
     private java.time.LocalDate extractLocalDate(Map<String, Object> map, String key) {
         Object value = map.get(key);
-        if (value == null) return null;
-        if (value instanceof java.time.LocalDate) return (java.time.LocalDate) value;
+        if (value == null)
+            return null;
+        if (value instanceof java.time.LocalDate)
+            return (java.time.LocalDate) value;
         if (value instanceof java.util.Date) {
             return ((java.util.Date) value).toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
         }
@@ -320,8 +346,10 @@ public class ManualSelectionService implements IManualSelectionService {
 
     private JsonNode extractJsonNode(Map<String, Object> map, String key) {
         Object value = map.get(key);
-        if (value == null) return null;
-        if (value instanceof JsonNode) return (JsonNode) value;
+        if (value == null)
+            return null;
+        if (value instanceof JsonNode)
+            return (JsonNode) value;
         try {
             return objectMapper.valueToTree(value);
         } catch (Exception e) {

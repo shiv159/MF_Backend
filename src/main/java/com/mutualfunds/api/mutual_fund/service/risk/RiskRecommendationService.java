@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 public class RiskRecommendationService {
 
     private final FundRepository fundRepository;
+    private final PortfolioAnalyzerService portfolioAnalyzerService;
 
     public RiskProfileResponse generateRecommendation(User user) {
         log.info("Generating recommendation for user: {}", user.getEmail());
@@ -296,12 +297,23 @@ public class RiskRecommendationService {
     }
 
     private RecommendationCategoryDTO createCategoryRecommendation(String category, double amount, Fund fund) {
+        // Extract Risk Metrics
+        FundRiskMetricsDTO metrics = FundRiskMetricsDTO.builder()
+                .alpha(getMetric(fund, "alpha"))
+                .beta(getMetric(fund, "beta"))
+                .sharpeRatio(getMetric(fund, "sharpeRatio"))
+                .standardDeviation(getMetric(fund, "standardDeviation"))
+                .rSquared(getMetric(fund, "rSquared"))
+                .build();
+
         FundRecommendationDTO fundDto = FundRecommendationDTO.builder()
                 .id(fund.getFundId())
                 .name(fund.getFundName())
                 .category(fund.getFundCategory())
                 .reason(generateReason(fund))
-                .metrics(Map.of("alpha", getMetric(fund, "alpha"), "sharpe", getMetric(fund, "sharpeRatio")))
+                .riskMetrics(metrics)
+                .sectorAllocation(fund.getSectorAllocationJson())
+                .topHoldings(fund.getTopHoldingsJson())
                 .build();
 
         return RecommendationCategoryDTO.builder()
@@ -320,9 +332,29 @@ public class RiskRecommendationService {
     }
 
     private PortfolioHealthDTO checkPortfolioHealth(List<RecommendationCategoryDTO> recs) {
-        return PortfolioHealthDTO.builder()
-                .sectorConcentration("Safe")
-                .overlapStatus("Low")
-                .build();
+        // Flatten funds and weights
+        List<Fund> funds = new ArrayList<>();
+        Map<UUID, Double> weights = new HashMap<>();
+
+        // Calculate total amount to normalize weights
+        double totalAmount = recs.stream().mapToDouble(RecommendationCategoryDTO::getAmount).sum();
+
+        for (RecommendationCategoryDTO cat : recs) {
+            for (FundRecommendationDTO dto : cat.getFunds()) {
+                // We need the Full Fund Entity. But DTO only has ID.
+                // This service already fetched funds earlier in selectFunds().
+                // However, we don't have easy access to Entity here without re-fetching or
+                // passing it down.
+                // Optimization: Let's fetch by ID here since it's only 3-5 funds.
+                fundRepository.findById(dto.getId()).ifPresent(fund -> {
+                    funds.add(fund);
+                    // Approximate weight based on category amount / number of funds in category
+                    double weight = (cat.getAmount() / cat.getFunds().size()) / totalAmount;
+                    weights.put(fund.getFundId(), weight);
+                });
+            }
+        }
+
+        return portfolioAnalyzerService.analyzePortfolio(funds, weights);
     }
 }

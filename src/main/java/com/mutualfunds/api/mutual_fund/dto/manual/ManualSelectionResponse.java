@@ -3,6 +3,7 @@ package com.mutualfunds.api.mutual_fund.dto.manual;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import com.mutualfunds.api.mutual_fund.dto.risk.PortfolioHealthDTO;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
@@ -16,4 +17,5 @@ public class ManualSelectionResponse {
     private List<ManualSelectionResult> results;
 
     private ManualSelectionPortfolio portfolio;
+    private PortfolioHealthDTO analysis;
 }

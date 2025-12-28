@@ -8,4 +8,10 @@ import lombok.Data;
 public class PortfolioHealthDTO {
     private String sectorConcentration;
     private String overlapStatus;
+
+    // Rich Analysis
+    private Double diversificationScore; // 0-10
+    private java.util.List<StockOverviewDTO> topOverlappingStocks;
+    private java.util.List<FundSimilarityDTO> fundSimilarities;
+    private java.util.Map<String, Double> aggregateSectorAllocation;
 }
