@@ -1,4 +1,4 @@
-package com.mutualfunds.api.mutual_fund.dto.risk;
+package com.mutualfunds.api.mutual_fund.dto.analytics;
 
 import lombok.Builder;
 import lombok.Data;

@@ -135,6 +135,13 @@
 			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+		<!-- Apache Commons Math for Monte Carlo -->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-math3</artifactId>
+			<version>3.6.1</version>
+		</dependency>
 	</dependencies>
 
 	<build>

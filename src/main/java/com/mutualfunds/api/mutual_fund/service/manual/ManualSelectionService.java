@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
+import com.mutualfunds.api.mutual_fund.service.analytics.PortfolioAnalyzerService;
+import com.mutualfunds.api.mutual_fund.service.analytics.WealthProjectionService;
 
 @Service
 @RequiredArgsConstructor
@@ -37,8 +39,10 @@ public class ManualSelectionService implements IManualSelectionService {
     private final FundRepository fundRepository;
     private final UserHoldingRepository userHoldingRepository;
     private final ETLEnrichmentService etlEnrichmentService;
+
     private final ObjectMapper objectMapper;
-    private final com.mutualfunds.api.mutual_fund.service.risk.PortfolioAnalyzerService portfolioAnalyzerService;
+    private final PortfolioAnalyzerService portfolioAnalyzerService;
+    private final WealthProjectionService wealthProjectionService;
 
     @Override
     @Transactional
@@ -162,6 +166,13 @@ public class ManualSelectionService implements IManualSelectionService {
                         h -> h.getWeightPct() / 100.0));
 
         var analysis = portfolioAnalyzerService.analyzePortfolio(analyzedFunds, weights);
+
+        // Wealth Projection (Existing Portfolio)
+        // Assume default ₹1 Lakh relative illustration for now, or user-specific if
+        // available.
+        // The DTO returns relative growth, so the start amount is a scaler.
+        var projection = wealthProjectionService.calculateProjection(analyzedFunds, weights, 100000.0, 10);
+        analysis.setWealthProjection(projection);
 
         return ManualSelectionResponse.builder()
                 .results(results)

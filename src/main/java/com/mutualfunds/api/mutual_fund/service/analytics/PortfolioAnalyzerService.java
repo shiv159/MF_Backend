@@ -1,10 +1,10 @@
-package com.mutualfunds.api.mutual_fund.service.risk;
+package com.mutualfunds.api.mutual_fund.service.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
 import com.mutualfunds.api.mutual_fund.dto.risk.PortfolioHealthDTO;
-import com.mutualfunds.api.mutual_fund.dto.risk.StockOverviewDTO;
-import com.mutualfunds.api.mutual_fund.dto.risk.FundSimilarityDTO;
+import com.mutualfunds.api.mutual_fund.dto.analytics.StockOverviewDTO;
+import com.mutualfunds.api.mutual_fund.dto.analytics.FundSimilarityDTO;
 import com.mutualfunds.api.mutual_fund.entity.Fund;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

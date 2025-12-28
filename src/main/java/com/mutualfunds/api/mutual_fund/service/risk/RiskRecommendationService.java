@@ -11,6 +11,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import com.mutualfunds.api.mutual_fund.service.analytics.PortfolioAnalyzerService;
+import com.mutualfunds.api.mutual_fund.service.analytics.WealthProjectionService;
+import com.mutualfunds.api.mutual_fund.dto.analytics.WealthProjectionDTO;
+import com.mutualfunds.api.mutual_fund.dto.analytics.FundSimilarityDTO;
 import java.util.stream.Collectors;
 
 @Service
@@ -20,6 +24,7 @@ public class RiskRecommendationService {
 
     private final FundRepository fundRepository;
     private final PortfolioAnalyzerService portfolioAnalyzerService;
+    private final WealthProjectionService wealthProjectionService;
 
     public RiskProfileResponse generateRecommendation(User user) {
         log.info("Generating recommendation for user: {}", user.getEmail());
@@ -355,6 +360,12 @@ public class RiskRecommendationService {
             }
         }
 
-        return portfolioAnalyzerService.analyzePortfolio(funds, weights);
+        PortfolioHealthDTO health = portfolioAnalyzerService.analyzePortfolio(funds, weights);
+
+        // Add Wealth Projection (Default: ₹1 Lakh for 10 Years for visualization)
+        var projection = wealthProjectionService.calculateProjection(funds, weights, 100000.0, 10);
+        health.setWealthProjection(projection);
+
+        return health;
     }
 }
