@@ -13,7 +13,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class ManualSelectionResult {
 
-    private UUID inputFundId;
+    private String inputFundId;
     private String inputFundName;
 
     private String status; // RESOLVED_FROM_DB | CREATED_FROM_ETL | ERROR

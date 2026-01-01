@@ -65,30 +65,62 @@ public class ManualSelectionService implements IManualSelectionService {
             ManualSelectionItemRequest item = selections.get(i);
             weightPctByIndex.put(i, item.getWeightPct());
 
+            // Check if fundId (ISIN) or fundName exists in database
+            Fund existingFund = null;
+            String inputIsin = null;
+            String inputFundName = null;
+
             if (item.getFundId() != null) {
-                Fund fund = fundRepository.findById(item.getFundId())
-                        .orElseThrow(() -> new BadRequestException("Fund not found for fundId: " + item.getFundId()));
-                resolvedFundsByIndex.put(i, fund);
+                // fundId is actually ISIN value
+                inputIsin = item.getFundId();
+                existingFund = fundRepository.findByIsin(inputIsin).orElse(null);
+            } else if (item.getFundName() != null) {
+                inputFundName = item.getFundName().trim();
+                final String finalInputFundName = inputFundName;
+                // Try to find by exact fund name match
+                List<Fund> matchingFunds = fundRepository.findByFundNameContainingIgnoreCase(inputFundName);
+                if (!matchingFunds.isEmpty()) {
+                    // Use the first exact match or closest match
+                    existingFund = matchingFunds.stream()
+                            .filter(f -> f.getFundName().equalsIgnoreCase(finalInputFundName))
+                            .findFirst()
+                            .orElse(matchingFunds.get(0));
+                }
+            }
+
+            // Check if existing fund data is fresh (within a week)
+            boolean isFreshData = existingFund != null && 
+                    existingFund.getLastUpdated() != null &&
+                    existingFund.getLastUpdated().isAfter(LocalDateTime.now().minusWeeks(1));
+
+            if (isFreshData) {
+                // Use existing fund from database
+                resolvedFundsByIndex.put(i, existingFund);
                 results.add(ManualSelectionResult.builder()
                         .inputFundId(item.getFundId())
-                        .inputFundName(null)
+                        .inputFundName(item.getFundName())
                         .status(STATUS_RESOLVED_FROM_DB)
-                        .fundId(fund.getFundId())
-                        .fundName(fund.getFundName())
-                        .isin(fund.getIsin())
-                        .message("Resolved from database")
+                        .fundId(existingFund.getFundId())
+                        .fundName(existingFund.getFundName())
+                        .isin(existingFund.getIsin())
+                        .message("Resolved from database (data is fresh)")
                         .build());
             } else {
+                // Call ETL to get fresh data
                 etlIndexes.add(i);
+                String fundNameForEtl = inputFundName != null ? inputFundName : 
+                        (existingFund != null ? existingFund.getFundName() : "Unknown");
                 etlRequests.add(ParsedHoldingEntry.builder()
-                        .fundName(item.getFundName().trim())
+                        .fundName(fundNameForEtl)
                         .units(1.0)
                         .build());
                 results.add(ManualSelectionResult.builder()
-                        .inputFundId(null)
+                        .inputFundId(item.getFundId())
                         .inputFundName(item.getFundName())
                         .status(STATUS_ENRICHED_FROM_ETL)
-                        .message("Resolved via ETL")
+                        .message(existingFund != null ? 
+                                "Refreshing from ETL (data is stale)" : 
+                                "Fetching from ETL (new fund)")
                         .build());
             }
         }

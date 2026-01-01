@@ -9,15 +9,13 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class ManualSelectionItemRequest {
 
-    private UUID fundId;
+    private String fundId;
 
     private String fundName;
 
@@ -26,10 +24,10 @@ public class ManualSelectionItemRequest {
     @Max(value = 100, message = "weightPct must be between 1 and 100")
     private Integer weightPct;
 
-    @AssertTrue(message = "Exactly one of fundId or fundName must be provided")
+    @AssertTrue(message = "At least one of fundId or fundName must be provided")
     public boolean isValidRef() {
-        boolean hasFundId = fundId != null;
+        boolean hasFundId = fundId != null && !fundId.trim().isEmpty();
         boolean hasFundName = fundName != null && !fundName.trim().isEmpty();
-        return hasFundId ^ hasFundName;
+        return hasFundId || hasFundName;
     }
 }
