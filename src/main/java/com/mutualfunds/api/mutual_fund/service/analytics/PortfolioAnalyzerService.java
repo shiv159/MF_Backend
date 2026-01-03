@@ -1,10 +1,10 @@
 package com.mutualfunds.api.mutual_fund.service.analytics;
 
 import com.fasterxml.jackson.databind.JsonNode;
-
 import com.mutualfunds.api.mutual_fund.dto.risk.PortfolioHealthDTO;
 import com.mutualfunds.api.mutual_fund.dto.analytics.StockOverviewDTO;
 import com.mutualfunds.api.mutual_fund.dto.analytics.FundSimilarityDTO;
+import com.mutualfunds.api.mutual_fund.dto.analytics.SectorOverlapDTO;
 import com.mutualfunds.api.mutual_fund.entity.Fund;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +29,7 @@ public class PortfolioAnalyzerService {
         log.info("Analyzing portfolio with {} funds", funds.size());
 
         Map<String, StockAggregator> stockMap = new HashMap<>(); // Key: ISIN
-        Map<String, Double> sectorMap = new HashMap<>();
+        Map<String, SectorAggregator> sectorAggregatorMap = new HashMap<>(); // Key: Sector Name
 
         for (Fund fund : funds) {
             double fundWeight = weights.getOrDefault(fund.getFundId(), 0.0);
@@ -40,7 +40,7 @@ public class PortfolioAnalyzerService {
             processStocks(fund, fundWeight, stockMap);
 
             // 2. Process Sectors
-            processSectors(fund, fundWeight, sectorMap);
+            processSectors(fund, fundWeight, sectorAggregatorMap);
         }
 
         // 3. Aggregate Results
@@ -58,14 +58,21 @@ public class PortfolioAnalyzerService {
                 .collect(Collectors.toList());
 
         // Sort sectors
-        Map<String, Double> sortedSectors = sectorMap.entrySet().stream()
-                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+        Map<String, Double> sortedSectors = sectorAggregatorMap.values().stream()
+                .sorted(Comparator.comparingDouble((SectorAggregator s) -> s.totalWeight).reversed())
                 .limit(10)
                 .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        e -> Math.round(e.getValue() * 100.0) / 100.0,
+                        s -> s.sectorName,
+                        s -> Math.round(s.totalWeight * 100.0) / 100.0,
                         (e1, e2) -> e1,
                         LinkedHashMap::new));
+
+        // Create Detailed Sector Overlap DTOs
+        List<SectorOverlapDTO> sectorOverlaps = sectorAggregatorMap.values().stream()
+                .sorted(Comparator.comparingDouble((SectorAggregator s) -> s.totalWeight).reversed())
+                .limit(8) // Top 8 sectors
+                .map(this::mapToSectorOverlapDTO)
+                .collect(Collectors.toList());
 
         // 4. Calculate Score
         double topSectorConcentration = sortedSectors.values().stream().findFirst().orElse(0.0);
@@ -76,8 +83,6 @@ public class PortfolioAnalyzerService {
         String overlapStatus = overlaps.isEmpty() ? "Low"
                 : (overlaps.get(0).getTotalWeight() > 5.0 ? "High" : "Moderate");
 
-        // ... inside analyzePortfolio method ...
-
         // 5. Calculate Fund Similarities (Pairwise)
         List<FundSimilarityDTO> similarities = calculateFundSimilarities(funds);
 
@@ -87,6 +92,7 @@ public class PortfolioAnalyzerService {
                 .diversificationScore(Math.round(diversificationScore * 10.0) / 10.0) // 1 decimal
                 .topOverlappingStocks(overlaps)
                 .aggregateSectorAllocation(sortedSectors)
+                .sectorOverlaps(sectorOverlaps)
                 .fundSimilarities(similarities)
                 .build();
     }
@@ -133,8 +139,6 @@ public class PortfolioAnalyzerService {
         Map<String, Double> s1 = extractSectorWeights(f1);
         Map<String, Double> s2 = extractSectorWeights(f2);
 
-        // Using Overlap Coefficient for Sectors as well (easier to understand than
-        // Cosine)
         double overlap = 0.0;
         for (Map.Entry<String, Double> entry : s1.entrySet()) {
             String sector = entry.getKey();
@@ -170,13 +174,38 @@ public class PortfolioAnalyzerService {
         return weights;
     }
 
-    // Helper for aggregation
+    // --- Helpers ---
+
     private static class StockAggregator {
         String name;
         String isin;
         double totalWeight = 0.0;
         int count = 0;
         List<String> funds = new ArrayList<>();
+    }
+
+    // New Aggregator for Sectors
+    private static class SectorAggregator {
+        String sectorName;
+        double totalWeight = 0.0;
+        Map<String, Double> fundContributions = new HashMap<>();
+    }
+
+    // Helper to map Aggregator to DTO
+    private SectorOverlapDTO mapToSectorOverlapDTO(SectorAggregator agg) {
+        List<SectorOverlapDTO.FundContribution> contributions = agg.fundContributions.entrySet().stream()
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                .map(e -> SectorOverlapDTO.FundContribution.builder()
+                        .fundName(e.getKey())
+                        .contribution(Math.round(e.getValue() * 100.0) / 100.0)
+                        .build())
+                .collect(Collectors.toList());
+
+        return SectorOverlapDTO.builder()
+                .sectorName(agg.sectorName)
+                .totalAllocation(Math.round(agg.totalWeight * 100.0) / 100.0)
+                .fundContributions(contributions)
+                .build();
     }
 
     private void processStocks(Fund fund, double fundWeight, Map<String, StockAggregator> stockMap) {
@@ -188,20 +217,17 @@ public class PortfolioAnalyzerService {
                 for (JsonNode stockNode : fund.getTopHoldingsJson()) {
                     String isin = stockNode.path("isin").asText();
                     String name = stockNode.path("securityName").asText();
-                    double stockFundWeight = stockNode.path("weighting").asDouble(); // e.g., 5.0 for 5%
+                    double stockFundWeight = stockNode.path("weighting").asDouble();
 
                     if (isin == null || isin.isEmpty())
                         continue;
 
-                    // Calculate exposure contribution from this fund (approximate since weights are
-                    // relative)
-                    // We sum the raw weights to show "Total Portfolio Exposure" approx
                     double contribution = stockFundWeight * fundWeight / 100.0;
 
                     StockAggregator agg = stockMap.computeIfAbsent(isin, k -> new StockAggregator());
                     agg.isin = isin;
                     agg.name = name;
-                    agg.totalWeight += contribution * 100.0; // Keep as percentage
+                    agg.totalWeight += contribution * 100.0;
                     agg.count++;
                     agg.funds.add(fund.getFundName());
                 }
@@ -211,9 +237,7 @@ public class PortfolioAnalyzerService {
         }
     }
 
-    // Simplification: Using Ref object for cleaner aggregation instead of Builder
-    // in loop
-    private void processSectors(Fund fund, double fundWeight, Map<String, Double> sectorMap) {
+    private void processSectors(Fund fund, double fundWeight, Map<String, SectorAggregator> sectorMap) {
         if (fund.getSectorAllocationJson() == null)
             return;
 
@@ -221,20 +245,33 @@ public class PortfolioAnalyzerService {
             Iterator<Map.Entry<String, JsonNode>> fields = fund.getSectorAllocationJson().fields();
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> field = fields.next();
-                String sector = field.getKey();
+                String sector = formatSectorName(field.getKey());
                 double allocation = field.getValue().asDouble();
 
                 double weightedAlloc = allocation * fundWeight;
-                sectorMap.merge(capitalise(sector), weightedAlloc, Double::sum);
+
+                SectorAggregator agg = sectorMap.computeIfAbsent(sector, k -> {
+                    SectorAggregator s = new SectorAggregator();
+                    s.sectorName = k;
+                    return s;
+                });
+
+                agg.totalWeight += weightedAlloc;
+                agg.fundContributions.merge(fund.getFundName(), weightedAlloc, Double::sum);
             }
         } catch (Exception e) {
             log.error("Error parsing sectors for fund {}", fund.getFundName(), e);
         }
     }
 
-    private String capitalise(String s) {
+    private String formatSectorName(String s) {
         if (s == null || s.isEmpty())
             return s;
-        return s.substring(0, 1).toUpperCase() + s.substring(1);
+
+        // 1. Insert space before capital letters (for CamelCase)
+        String spaced = s.replaceAll("([a-z])([A-Z])", "$1 $2");
+
+        // 2. Capitalize first letter
+        return spaced.substring(0, 1).toUpperCase() + spaced.substring(1);
     }
 }

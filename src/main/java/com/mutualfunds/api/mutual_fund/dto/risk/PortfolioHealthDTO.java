@@ -18,4 +18,5 @@ public class PortfolioHealthDTO {
     private java.util.List<FundSimilarityDTO> fundSimilarities;
     private WealthProjectionDTO wealthProjection;
     private java.util.Map<String, Double> aggregateSectorAllocation;
+    private java.util.List<com.mutualfunds.api.mutual_fund.dto.analytics.SectorOverlapDTO> sectorOverlaps;
 }
