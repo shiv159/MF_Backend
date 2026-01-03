@@ -2,39 +2,62 @@ package com.mutualfunds.api.mutual_fund.ai.controller;
 
 import com.mutualfunds.api.mutual_fund.ai.service.AiService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.MediaType;
-import org.springframework.http.codec.ServerSentEvent;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.Payload;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Controller;
 
+import java.security.Principal;
 import java.util.Map;
 
-@RestController
-@RequestMapping("/api/chat")
+@Controller
 @RequiredArgsConstructor
-@CrossOrigin(originPatterns = "*") // Adjust for production
+@Slf4j
 public class ChatController {
 
     private final AiService aiService;
+    private final SimpMessagingTemplate messagingTemplate;
 
-    @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<ServerSentEvent<String>> chatStream(@RequestBody Map<String, String> request) {
+    @MessageMapping("/chat.sendMessage")
+    public void sendMessage(@Payload Map<String, String> request, Principal principal) {
         String message = request.get("message");
         String conversationId = request.get("conversationId");
+        String userIdData = request.get("userId"); // Prefer from payload if needed for logic
 
-        // Get userId from request body (sent by frontend) or SecurityContext
-        String userId = request.get("userId");
-        if (userId == null || userId.isBlank()) {
-            // Try to get from authenticated user
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth != null && auth.getName() != null && !"anonymousUser".equals(auth.getName())) {
-                userId = auth.getName();
-            }
+        String effectiveUserId = userIdData;
+
+        // Fallback or verification using Principal
+        if (principal != null) {
+            log.info("WebSocket Chat request from authenticated user: {}", principal.getName());
+            // Note: principal.getName() is the email based on our UserDetailService
+            // If we need the UUID, we might need to look it up or trust the payload
+            // For now, trusting the payload's userId for the portfolio context service
+        } else {
+            log.warn("WebSocket Chat request from unauthenticated user!");
         }
 
-        return aiService.streamChat(message, conversationId, userId)
-                .map(content -> ServerSentEvent.builder(content).build());
+        log.info("Processing chat for userId: {}, conversationId: {}", effectiveUserId, conversationId);
+
+        aiService.streamChat(message, conversationId, effectiveUserId)
+                .subscribe(
+                        content -> {
+                            // Send to the specific user who sent the message
+                            if (principal != null) {
+                                messagingTemplate.convertAndSendToUser(
+                                        principal.getName(),
+                                        "/queue/reply",
+                                        content);
+                            }
+                        },
+                        error -> {
+                            log.error("Chat streaming error", error);
+                            if (principal != null) {
+                                messagingTemplate.convertAndSendToUser(
+                                        principal.getName(),
+                                        "/queue/reply",
+                                        "Error: " + error.getMessage());
+                            }
+                        });
     }
 }

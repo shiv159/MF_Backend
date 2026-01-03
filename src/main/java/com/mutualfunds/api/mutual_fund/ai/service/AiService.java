@@ -1,14 +1,18 @@
 package com.mutualfunds.api.mutual_fund.ai.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.InMemoryChatMemory;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.UUID;
 
 @Service
+@Slf4j
 public class AiService {
 
     private final ChatClient chatClient;
@@ -38,31 +42,42 @@ public class AiService {
     }
 
     public Flux<String> streamChat(String message, String conversationId, String userId) {
-        // Build portfolio context if userId is provided
-        String portfolioContext = "";
-        if (userId != null && !userId.isBlank()) {
-            try {
-                UUID userUUID = UUID.fromString(userId);
-                portfolioContext = portfolioContextService.buildPortfolioContext(userUUID);
-            } catch (IllegalArgumentException e) {
-                portfolioContext = "Unable to fetch portfolio data - invalid user ID.";
+        // Wrap entire operation in reactive chain to catch all exceptions
+        return Mono.fromCallable(() -> {
+            // Build portfolio context if userId is provided
+            String portfolioContext = "";
+            if (userId != null && !userId.isBlank()) {
+                try {
+                    UUID userUUID = UUID.fromString(userId);
+                    portfolioContext = portfolioContextService.buildPortfolioContext(userUUID);
+                } catch (IllegalArgumentException e) {
+                    portfolioContext = "Unable to fetch portfolio data - invalid user ID.";
+                }
+            } else {
+                portfolioContext = "No user portfolio data available. Provide general financial advice.";
             }
-        } else {
-            portfolioContext = "No user portfolio data available. Provide general financial advice.";
-        }
 
-        // Combine portfolio context with user message
-        String enrichedMessage = String.format(
-                "## Portfolio Data\n%s\n\n## User Question\n%s",
-                portfolioContext, message);
+            // Combine portfolio context with user message
+            String enrichedMessage = String.format(
+                    "## Portfolio Data\n%s\n\n## User Question\n%s",
+                    portfolioContext, message);
 
-        // Use non-streaming call to get properly formatted text
-        String fullResponse = this.chatClient.prompt()
-                .user(enrichedMessage)
-                .advisors(a -> a.param(MessageChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId))
-                .call()
-                .content();
+            log.info("Calling AI with enriched message for conversationId: {}", conversationId);
 
-        return Flux.just(fullResponse != null ? fullResponse : "I couldn't generate a response.");
+            // Make the AI call
+            String fullResponse = this.chatClient.prompt()
+                    .user(enrichedMessage)
+                    .advisors(a -> a.param(MessageChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId))
+                    .call()
+                    .content();
+
+            return fullResponse != null ? fullResponse : "I couldn't generate a response.";
+        })
+                .subscribeOn(Schedulers.boundedElastic()) // Run blocking call on separate thread
+                .flux()
+                .onErrorResume(e -> {
+                    log.error("AI Service Error", e);
+                    return Flux.just("Sorry, I encountered an error: " + e.getMessage());
+                });
     }
 }

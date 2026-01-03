@@ -4,6 +4,7 @@ import com.mutualfunds.api.mutual_fund.security.JWTAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -30,9 +31,15 @@ public class SecurityConfig {
                 .cors(cors -> cors.configure(http)) // Enable CORS
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
+                        // Allow CORS preflight requests without authentication
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // Chat endpoint uses permitAll due to SSE async dispatch security limitations
+                        // User context is passed via request body instead
+                        .requestMatchers("/api/chat/**").permitAll()
+                        // WebSocket Handshake
+                        .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/swagger-ui/**",
-                                "/v3/api-docs/**", "/actuator/health", "/actuator/info", "/actuator/health/**",
-                                "/api/chat/**")
+                                "/v3/api-docs/**", "/actuator/health", "/actuator/info", "/actuator/health/**")
                         .permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
