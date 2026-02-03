@@ -20,65 +20,68 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AuthService implements IAuthService {
 
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JWTUtil jwtUtil;
-    private final AuthenticationManager authenticationManager;
+        private final UserRepository userRepository;
+        private final PasswordEncoder passwordEncoder;
+        private final JWTUtil jwtUtil;
+        private final AuthenticationManager authenticationManager;
 
-    public AuthResponse register(RegisterRequest request) {
+        public AuthResponse register(RegisterRequest request) {
 
-        // Check if email already exists
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new BadRequestException("Email already registered");
+                // Check if email already exists
+                if (userRepository.existsByEmail(request.getEmail())) {
+                        throw new BadRequestException("Email already registered");
+                }
+
+                // Create user
+                User user = User.builder()
+                                .email(request.getEmail())
+                                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                                .fullName(request.getFullName())
+                                .phone(request.getPhone())
+                                .userType(UserType.new_investor) // Default to new investor
+                                .isActive(true)
+                                .build();
+
+                User savedUser = userRepository.save(user);
+
+                // Generate token
+                String token = jwtUtil.generateToken(savedUser.getEmail(), savedUser.getUserId());
+
+                return AuthResponse.builder()
+                                .status("success")
+                                .accessToken(token)
+                                .userId(savedUser.getUserId())
+                                .email(savedUser.getEmail())
+                                .fullName(savedUser.getFullName())
+                                .userType(savedUser.getUserType() != null ? savedUser.getUserType().name() : null)
+                                .authProvider(savedUser.getAuthProvider() != null ? savedUser.getAuthProvider().name()
+                                                : "LOCAL")
+                                .createdAt(savedUser.getCreatedAt())
+                                .build();
         }
 
-        // Create user
-        User user = User.builder()
-                .email(request.getEmail())
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .fullName(request.getFullName())
-                .phone(request.getPhone())
-                .userType(UserType.new_investor) // Default to new investor
-                .isActive(true)
-                .build();
+        public AuthResponse login(LoginRequest request) {
+                // Authenticate user
+                Authentication authentication = authenticationManager.authenticate(
+                                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
 
-        User savedUser = userRepository.save(user);
+                // Get user details
+                User user = userRepository.findByEmail(request.getEmail())
+                                .orElseThrow(() -> new BadRequestException("User not found"));
 
-        // Generate token
-        String token = jwtUtil.generateToken(savedUser.getEmail(), savedUser.getUserId());
+                // Generate token
+                String token = jwtUtil.generateToken(user.getEmail(), user.getUserId());
 
-        return AuthResponse.builder()
-                .status("success")
-                .accessToken(token)
-                .userId(savedUser.getUserId())
-                .email(savedUser.getEmail())
-                .fullName(savedUser.getFullName())
-                .userType(savedUser.getUserType() != null ? savedUser.getUserType().name() : null)
-                .createdAt(savedUser.getCreatedAt())
-                .build();
-    }
-
-    public AuthResponse login(LoginRequest request) {
-        // Authenticate user
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
-
-        // Get user details
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new BadRequestException("User not found"));
-
-        // Generate token
-        String token = jwtUtil.generateToken(user.getEmail(), user.getUserId());
-
-        return AuthResponse.builder()
-                .status("success")
-                .accessToken(token)
-                .userId(user.getUserId())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .userType(user.getUserType() != null ? user.getUserType().name() : null)
-                .createdAt(user.getCreatedAt()) // Fixed: was LocalDateTime.now()
-                .build();
-    }
+                return AuthResponse.builder()
+                                .status("success")
+                                .accessToken(token)
+                                .userId(user.getUserId())
+                                .email(user.getEmail())
+                                .fullName(user.getFullName())
+                                .userType(user.getUserType() != null ? user.getUserType().name() : null)
+                                .authProvider(user.getAuthProvider() != null ? user.getAuthProvider().name() : "LOCAL")
+                                .createdAt(user.getCreatedAt())
+                                .build();
+        }
 
 }

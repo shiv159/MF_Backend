@@ -1,6 +1,7 @@
 package com.mutualfunds.api.mutual_fund.config;
 
 import com.mutualfunds.api.mutual_fund.security.JWTAuthenticationFilter;
+import com.mutualfunds.api.mutual_fund.security.oauth2.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +16,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.http.HttpStatus;
 
 @Configuration
 @EnableWebSecurity
@@ -23,6 +27,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JWTAuthenticationFilter jwtAuthenticationFilter;
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
 
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -38,10 +43,19 @@ public class SecurityConfig {
                         .requestMatchers("/api/chat/**").permitAll()
                         // WebSocket Handshake
                         .requestMatchers("/ws/**").permitAll()
+                        // OAuth2 endpoints
+                        .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/swagger-ui/**",
                                 "/v3/api-docs/**", "/actuator/health", "/actuator/info", "/actuator/health/**")
                         .permitAll()
                         .anyRequest().authenticated())
+                // OAuth2 Login configuration
+                .oauth2Login(oauth2 -> oauth2
+                        .successHandler(oAuth2LoginSuccessHandler))
+                // Return 401 instead of redirecting to login for API endpoints
+                .exceptionHandling(e -> e
+                        .defaultAuthenticationEntryPointFor(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
+                                new AntPathRequestMatcher("/api/**")))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

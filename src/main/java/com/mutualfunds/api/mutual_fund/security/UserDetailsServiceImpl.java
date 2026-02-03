@@ -21,7 +21,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
         return new UserPrincipal(
                 user.getEmail(),
-                user.getPasswordHash(),
+                user.getPasswordHash() != null ? user.getPasswordHash() : "", // Handle null password for OAuth users
                 org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_USER"),
                 user.getUserId());
     }

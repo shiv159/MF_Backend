@@ -16,5 +16,6 @@ public class AuthResponse {
     private String email;
     private String fullName; // Added: for UI personalization
     private String userType; // Added: for frontend routing/logic
+    private String authProvider; // Added: for OAuth provider (LOCAL, GOOGLE)
     private LocalDateTime createdAt;
 }

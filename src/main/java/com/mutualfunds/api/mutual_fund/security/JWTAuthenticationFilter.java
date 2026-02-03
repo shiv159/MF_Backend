@@ -30,26 +30,37 @@ public class JWTAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String requestURI = request.getRequestURI();
 
-        // Skip authentication for public endpoints
-        if (requestURI.startsWith("/api/v1/auth/") ||
-            requestURI.startsWith("/swagger-ui/") ||
-            requestURI.startsWith("/v3/api-docs/")) {
+        // Skip authentication for specific public endpoints
+        if (requestURI.equals("/api/v1/auth/register") ||
+                requestURI.equals("/api/v1/auth/login") ||
+                requestURI.startsWith("/swagger-ui/") ||
+                requestURI.startsWith("/v3/api-docs/")) {
             filterChain.doFilter(request, response);
             return;
         }
 
         try {
             String jwt = getJwtFromRequest(request);
+            log.info("Request URI: {}, Authorization Header present: {}", requestURI, StringUtils.hasText(jwt));
 
-            if (StringUtils.hasText(jwt) && jwtUtil.validateToken(jwt)) {
-                String email = jwtUtil.extractEmail(jwt);
+            if (StringUtils.hasText(jwt)) {
+                if (jwtUtil.validateToken(jwt)) {
+                    String email = jwtUtil.extractEmail(jwt);
+                    log.info("JWT valid for email: {}", email);
 
-                UserDetails userDetails = userDetailsService.loadUserByUsername(email);
-                UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    log.info("Security context set for user: {}", email);
+                } else {
+                    log.warn("JWT validation failed for token: {}",
+                            jwt.substring(0, Math.min(jwt.length(), 20)) + "...");
+                }
+            } else {
+                log.info("No JWT token found in request");
             }
         } catch (Exception ex) {
             log.error("Could not set user authentication in security context", ex);

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     full_name VARCHAR(255),
     phone VARCHAR(20),
     user_type VARCHAR(20) CHECK (user_type IN ('existing_investor', 'new_investor')),
+    auth_provider VARCHAR(20) DEFAULT 'LOCAL' CHECK (auth_provider IN ('LOCAL', 'GOOGLE')),
     investment_horizon_years INTEGER,
     risk_tolerance VARCHAR(20) CHECK (risk_tolerance IN ('CONSERVATIVE', 'MODERATE', 'AGGRESSIVE')),
     monthly_sip_amount DECIMAL(15,2),
@@ -59,6 +60,10 @@ CREATE TABLE IF NOT EXISTS user_holdings (
 -- Backfill / safe evolution: add column if the table already exists
 ALTER TABLE IF EXISTS user_holdings
     ADD COLUMN IF NOT EXISTS weight_pct INTEGER CHECK (weight_pct >= 1 AND weight_pct <= 100);
+
+-- Safe migration for OAuth: add auth_provider column if users table exists
+ALTER TABLE IF EXISTS users
+    ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(20) DEFAULT 'LOCAL';
 
 -- Portfolio Uploads table
 CREATE TABLE IF NOT EXISTS portfolio_uploads (

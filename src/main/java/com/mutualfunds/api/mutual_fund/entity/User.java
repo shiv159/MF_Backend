@@ -2,6 +2,7 @@ package com.mutualfunds.api.mutual_fund.entity;
 
 import com.mutualfunds.api.mutual_fund.enums.RiskTolerance;
 import com.mutualfunds.api.mutual_fund.enums.UserType;
+import com.mutualfunds.api.mutual_fund.enums.AuthProvider;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -41,6 +42,11 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(name = "user_type")
     private UserType userType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auth_provider")
+    @Builder.Default
+    private AuthProvider authProvider = AuthProvider.LOCAL;
 
     @Column(name = "investment_horizon_years")
     private Integer investmentHorizonYears;
