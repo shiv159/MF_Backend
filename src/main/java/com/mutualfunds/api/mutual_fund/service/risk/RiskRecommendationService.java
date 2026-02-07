@@ -27,7 +27,7 @@ public class RiskRecommendationService {
     private final WealthProjectionService wealthProjectionService;
 
     public RiskProfileResponse generateRecommendation(User user) {
-        log.info("Generating recommendation for user: {}", user.getEmail());
+        log.info("Generating recommendation");
 
         // 1. Risk Analysis
         RiskAnalysisDTO riskAnalysis = analyzeRisk(user);

@@ -48,7 +48,7 @@ public class HoldingsPersistenceService {
      */
     @Transactional
     public Integer persistEnrichedHoldings(List<Map<String, Object>> enrichedData, UUID userId) {
-        log.info("Starting to persist {} enriched holdings for user ID: {}", enrichedData.size(), userId);
+        log.info("Starting to persist {} enriched holdings", enrichedData.size());
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with ID: " + userId));
@@ -140,16 +140,14 @@ public class HoldingsPersistenceService {
 
                 userHoldingRepository.save(userHolding);
                 successCount++;
-                log.debug("Persisted holding for user: {}, fund ISIN: {}, units: {}, value: {}",
-                        userId, isin, units, value);
+                log.debug("Persisted holding for fund ISIN: {}, units: {}, value: {}", isin, units, value);
 
             } catch (Exception e) {
-                log.error("Failed to persist holding for user {}: {}", userId, holding, e);
+                log.error("Failed to persist one enriched holding record", e);
             }
         }
 
-        log.info("Successfully persisted {} out of {} enriched holdings for user ID: {}",
-                successCount, enrichedData.size(), userId);
+        log.info("Successfully persisted {} out of {} enriched holdings", successCount, enrichedData.size());
         return successCount;
     }
 

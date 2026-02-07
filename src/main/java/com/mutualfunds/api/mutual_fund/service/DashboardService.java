@@ -40,12 +40,12 @@ public class DashboardService implements IDashboardService {
 
         @Override
         public DashboardResponse getDashboardData(UUID userId) {
-                log.info("Fetching dashboard data for user: {}", userId);
+                log.info("Fetching dashboard data");
 
                 // Fetch user
                 User user = userRepository.findById(userId)
                                 .orElseThrow(() -> {
-                                        log.error("User not found with ID: {}", userId);
+                                        log.error("User not found for dashboard request");
                                         return new BadRequestException("User not found");
                                 });
 
@@ -54,7 +54,7 @@ public class DashboardService implements IDashboardService {
 
                 // Fetch all holdings for the user
                 List<UserHolding> holdings = userHoldingRepository.findByUserIdWithFund(userId);
-                log.debug("Found {} holdings for user: {}", holdings.size(), userId);
+                log.debug("Found {} holdings", holdings.size());
 
                 // Build portfolio summary
                 PortfolioSummaryDTO portfolioSummary = buildPortfolioSummary(holdings);
@@ -66,7 +66,7 @@ public class DashboardService implements IDashboardService {
 
                 // Fetch upload history
                 List<PortfolioUpload> uploads = portfolioUploadRepository.findByUser_UserId(userId);
-                log.debug("Found {} uploads for user: {}", uploads.size(), userId);
+                log.debug("Found {} uploads", uploads.size());
 
                 List<UploadHistoryDTO> uploadHistory = uploads.stream()
                                 .map(this::buildUploadHistoryDTO)
@@ -74,13 +74,13 @@ public class DashboardService implements IDashboardService {
 
                 // Fetch AI insights
                 List<AIInsight> insights = aiInsightRepository.findByUser_UserIdOrderByCreatedAtDesc(userId);
-                log.debug("Found {} AI insights for user: {}", insights.size(), userId);
+                log.debug("Found {} AI insights", insights.size());
 
                 List<AIInsightDTO> aiInsights = insights.stream()
                                 .map(this::buildAIInsightDTO)
                                 .collect(Collectors.toList());
 
-                log.info("Dashboard data successfully retrieved for user: {}", userId);
+                log.info("Dashboard data successfully retrieved");
 
                 return DashboardResponse.builder()
                                 .userProfile(userProfile)

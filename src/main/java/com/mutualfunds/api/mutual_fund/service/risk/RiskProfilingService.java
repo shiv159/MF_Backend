@@ -25,7 +25,7 @@ public class RiskProfilingService implements IRiskProfilingService {
     @Override
     public User updateRiskProfile(RiskProfileRequest request) {
         User user = getCurrentUser();
-        log.info("Updating risk profile for user: {}", user.getEmail());
+        log.info("Updating risk profile");
 
         // 1. Overwrite profile data JSON
         JsonNode profileData = objectMapper.valueToTree(request);

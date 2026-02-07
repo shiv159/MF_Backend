@@ -48,7 +48,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         String email = oAuth2User.getAttribute("email");
         String name = oAuth2User.getAttribute("name");
 
-        log.info("OAuth2 login success for email: {}", email);
+        log.info("OAuth2 login successful");
 
         // Find existing user or create new one
         User user = processOAuthUser(email, name);
@@ -61,7 +61,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
                 .queryParam("token", jwtToken)
                 .build().toUriString();
 
-        log.info("Redirecting to frontend: {}", targetUrl);
+        log.info("Redirecting OAuth2 user to frontend callback");
         getRedirectStrategy().sendRedirect(request, response, targetUrl);
     }
 
@@ -74,7 +74,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
             if (name != null && !name.equals(user.getFullName())) {
                 user.setFullName(name);
                 user = userRepository.save(user);
-                log.info("Updated existing OAuth user: {}", email);
+                log.info("Updated existing OAuth user profile");
             }
             return user;
         }
@@ -89,7 +89,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
                 .build();
 
         User savedUser = userRepository.save(newUser);
-        log.info("Created new OAuth user: {}", email);
+        log.info("Created new OAuth user");
         return savedUser;
     }
 }

@@ -35,7 +35,7 @@ public class ChatController {
 
         // Fallback or verification using Principal
         if (principal != null) {
-            log.info("WebSocket Chat request from authenticated user: {}", principal.getName());
+            log.info("WebSocket chat request from authenticated user");
             // Note: principal.getName() is the email based on our UserDetailService
             // If we need the UUID, we might need to look it up or trust the payload
             // For now, trusting the payload's userId for the portfolio context service
@@ -43,7 +43,7 @@ public class ChatController {
             log.warn("WebSocket Chat request from unauthenticated user!");
         }
 
-        log.info("Processing chat for userId: {}, conversationId: {}", effectiveUserId, conversationId);
+        log.info("Processing chat request");
 
         aiService.streamChat(message, conversationId, effectiveUserId)
                 .subscribe(
@@ -87,7 +87,7 @@ public class ChatController {
         }
 
         if (principal != null) {
-            log.info("HTTP Chat request from authenticated user: {}", principal.getName());
+            log.info("HTTP chat request from authenticated user");
         } else {
             log.warn("HTTP Chat request from unauthenticated user.");
         }

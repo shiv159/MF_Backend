@@ -26,23 +26,23 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-        log.info("User registration attempt for email: {}", request.getEmail());
+        log.info("User registration attempt received");
         AuthResponse response = authService.register(request);
-        log.info("User registration successful for email: {}", request.getEmail());
+        log.info("User registration successful");
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        log.info("User login attempt for email: {}", request.getEmail());
+        log.info("User login attempt received");
         AuthResponse response = authService.login(request);
-        log.info("User login successful for email: {}", request.getEmail());
+        log.info("User login successful");
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/me")
     public ResponseEntity<AuthResponse> getCurrentUser(@AuthenticationPrincipal UserDetails userDetails) {
-        log.info("Fetching current user details for: {}", userDetails.getUsername());
+        log.info("Fetching current user details");
 
         User user = userRepository.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new BadRequestException("User not found"));

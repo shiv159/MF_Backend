@@ -41,7 +41,7 @@ public class OnboardingController {
 
         // 1. Update Profile (Overwrite mode)
         User user = riskProfilingService.updateRiskProfile(request);
-        log.info("Risk profile updated for user: {}", user.getEmail());
+        log.info("Risk profile updated successfully");
 
         // 2. Generate Recommendation
         RiskProfileResponse response = riskRecommendationService.generateRecommendation(user);
@@ -69,8 +69,7 @@ public class OnboardingController {
         User currentUser = onboardingService.getCurrentUser();
         UUID userId = currentUser.getUserId();
 
-        log.info("Processing portfolio upload request for user: {} with file: {}", userId,
-                file.getOriginalFilename());
+        log.info("Processing portfolio upload request");
 
         // Validate file
         if (file.isEmpty()) {
@@ -131,7 +130,7 @@ public class OnboardingController {
 
     @GetMapping("/uploads/{uploadId}")
     public ResponseEntity<UploadResponse> getUploadStatus(@PathVariable UUID uploadId) {
-        log.info("Checking upload status for upload ID: {}", uploadId);
+        log.info("Checking upload status request");
 
         // Get authenticated user
         User currentUser = onboardingService.getCurrentUser();
@@ -141,8 +140,7 @@ public class OnboardingController {
 
         // Verify ownership
         if (!upload.getUser().getUserId().equals(currentUser.getUserId())) {
-            log.warn("User {} attempted to access upload {} owned by user {}",
-                    currentUser.getUserId(), uploadId, upload.getUser().getUserId());
+            log.warn("Upload access denied due to ownership mismatch");
             throw new com.mutualfunds.api.mutual_fund.exception.ForbiddenException(
                     "Access denied: You can only view your own uploads");
         }

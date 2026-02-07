@@ -73,13 +73,12 @@ public class UploadProcessingService implements IUploadProcessingService {
             log.info("ETL enrichment completed. Enriched {} records for upload ID: {}", enrichmentResult.getEnrichedFundCount(), uploadId);
             
             // Step 3: Persist enriched holdings to the database
-            log.debug("Starting to persist enriched holdings for user ID: {}", upload.getUser().getUserId());
+            log.debug("Starting to persist enriched holdings");
             Integer persistedCount = holdingsPersistenceService.persistEnrichedHoldings(
                     enrichmentResult.getEnrichedData(),
                     upload.getUser().getUserId()
             );
-            log.info("Enriched holdings persisted successfully. {} holdings saved for user ID: {}", 
-                    persistedCount, upload.getUser().getUserId());
+            log.info("Enriched holdings persisted successfully. {} holdings saved", persistedCount);
             
             // Step 4: Update upload status with enrichment metrics
             upload.setStatus(UploadStatus.completed);

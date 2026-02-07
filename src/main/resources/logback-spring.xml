@@ -1,14 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <!-- Spring profile-specific configurations -->
-    <springProfile name="dev,default">
+    <springProfile name="dev">
         <property name="LOG_LEVEL" value="DEBUG"/>
+        <property name="APP_LOG_LEVEL" value="DEBUG"/>
+        <property name="SECURITY_LOG_LEVEL" value="DEBUG"/>
+        <property name="HIBERNATE_SQL_LOG_LEVEL" value="DEBUG"/>
+        <property name="HIBERNATE_BIND_LOG_LEVEL" value="TRACE"/>
+        <property name="WS_STATS_LOG_LEVEL" value="INFO"/>
         <property name="LOG_FILE" value="logs/mutual-fund-app.log"/>
     </springProfile>
     
-    <springProfile name="prod">
+    <springProfile name="default,prod">
         <property name="LOG_LEVEL" value="INFO"/>
-        <property name="LOG_FILE" value="/var/log/mutual-fund-app.log"/>
+        <property name="APP_LOG_LEVEL" value="INFO"/>
+        <property name="SECURITY_LOG_LEVEL" value="INFO"/>
+        <property name="HIBERNATE_SQL_LOG_LEVEL" value="WARN"/>
+        <property name="HIBERNATE_BIND_LOG_LEVEL" value="WARN"/>
+        <property name="WS_STATS_LOG_LEVEL" value="WARN"/>
+        <property name="LOG_FILE" value="logs/mutual-fund-app.log"/>
     </springProfile>
 
     <!-- Console Appender -->
@@ -47,19 +57,21 @@
     <!-- Logger Configuration -->
     
     <!-- Application specific loggers -->
-    <logger name="com.mutualfunds.api" level="${LOG_LEVEL}"/>
-    <logger name="com.mutualfunds.api.mutual_fund.controller" level="DEBUG"/>
-    <logger name="com.mutualfunds.api.mutual_fund.service" level="DEBUG"/>
-    <logger name="com.mutualfunds.api.mutual_fund.exception" level="DEBUG"/>
+    <logger name="com.mutualfunds.api" level="${APP_LOG_LEVEL}"/>
+    <logger name="com.mutualfunds.api.mutual_fund.controller" level="${APP_LOG_LEVEL}"/>
+    <logger name="com.mutualfunds.api.mutual_fund.service" level="${APP_LOG_LEVEL}"/>
+    <logger name="com.mutualfunds.api.mutual_fund.exception" level="${APP_LOG_LEVEL}"/>
     
     <!-- Spring Framework loggers -->
     <logger name="org.springframework.web" level="INFO"/>
-    <logger name="org.springframework.security" level="INFO"/>
+    <logger name="org.springframework.security" level="${SECURITY_LOG_LEVEL}"/>
     <logger name="org.springframework.data" level="INFO"/>
+    <logger name="org.springframework.web.socket.config.WebSocketMessageBrokerStats" level="${WS_STATS_LOG_LEVEL}"/>
     
     <!-- Hibernate/JPA loggers -->
-    <logger name="org.hibernate.SQL" level="DEBUG"/>
-    <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="TRACE"/>
+    <logger name="org.hibernate.SQL" level="${HIBERNATE_SQL_LOG_LEVEL}"/>
+    <logger name="org.hibernate.orm.jdbc.bind" level="${HIBERNATE_BIND_LOG_LEVEL}"/>
+    <logger name="org.hibernate.type.descriptor.sql.BasicBinder" level="${HIBERNATE_BIND_LOG_LEVEL}"/>
     <logger name="org.springframework.orm.jpa" level="INFO"/>
     
     <!-- External libraries -->

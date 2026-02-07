@@ -39,9 +39,7 @@ public class ETLClient {
         String url = etlServiceUrl + enrichEndpoint;
         log.info("Calling Python ETL service for enrichment (async): {} with {} holdings", 
                 url, request.getParsedHoldings().size());
-        log.debug("Enrichment request details: uploadId={}, userId={}", 
-                request.getUploadId(), request.getUserId());
-        log.debug("Enrichment request full payload: {}", request);
+        log.debug("Enrichment request prepared");
 
         return webClient
                 .post()

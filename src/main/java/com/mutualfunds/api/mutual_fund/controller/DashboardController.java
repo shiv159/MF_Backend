@@ -49,12 +49,12 @@ public class DashboardController {
                 .getPrincipal();
 
         UUID userId = principal.getUserId();
-        log.info("Fetching dashboard for user: {}", userId);
+        log.info("Fetching dashboard data");
 
         // Get dashboard data
         DashboardResponse dashboard = dashboardService.getDashboardData(userId);
 
-        log.info("Dashboard successfully retrieved for user: {}", userId);
+        log.info("Dashboard successfully retrieved");
         return ResponseEntity.ok(dashboard);
     }
 }

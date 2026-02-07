@@ -39,7 +39,7 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
             UUID userId,
             String fileType) {
 
-        log.info("Starting ETL enrichment for {} holdings for user: {}", enrichmentData.size(), userId);
+        log.info("Starting ETL enrichment for {} holdings", enrichmentData.size());
 
         try {
             // Build enrichment request with already-typed holdings
@@ -62,8 +62,7 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
             }
 
             if (!"completed".equalsIgnoreCase(response.getStatus())) {
-                log.error("ETL service returned non-completed status: {}. Full response: {}", response.getStatus(),
-                        response);
+                log.error("ETL service returned non-completed status: {}", response.getStatus());
                 log.error("Error message from ETL: {}", response.getErrorMessage());
                 throw new RuntimeException("ETL service enrichment failed with status: " + response.getStatus() + " - "
                         + response.getErrorMessage());

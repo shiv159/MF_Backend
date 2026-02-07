@@ -46,7 +46,7 @@ public class OnboardingService implements IOnboardingService {
         }
 
         String email = authentication.getName();
-        log.debug("Found email {} from security context", email);
+        log.debug("Resolved authenticated user from security context");
 
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
@@ -61,7 +61,7 @@ public class OnboardingService implements IOnboardingService {
     @Override
     public User updateRiskProfile(RiskProfileRequest request) {
         User user = getCurrentUser();
-        log.debug("Updating risk profile for user: {}", user.getEmail());
+        log.debug("Updating risk profile");
 
         user.setInvestmentHorizonYears(request.getHorizon());
         user.setRiskTolerance(request.getRisk());
@@ -69,7 +69,7 @@ public class OnboardingService implements IOnboardingService {
         user.setPrimaryGoal(request.getGoal());
 
         User updatedUser = userRepository.save(user);
-        log.info("Risk profile updated successfully for user: {}", user.getEmail());
+        log.info("Risk profile updated successfully");
 
         return updatedUser;
     }
@@ -85,7 +85,7 @@ public class OnboardingService implements IOnboardingService {
      */
     @Override
     public PortfolioUpload createPortfolioUpload(UUID userId, String fileName, String fileType, long fileSize) {
-        log.debug("Creating portfolio upload record for user ID: {}", userId);
+        log.debug("Creating portfolio upload record");
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ResourceNotFoundException.forResource("User", userId));
