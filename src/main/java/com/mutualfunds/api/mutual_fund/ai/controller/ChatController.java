@@ -7,9 +7,15 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseBody;
+import reactor.core.publisher.Mono;
 
 import java.security.Principal;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Controller
 @RequiredArgsConstructor
@@ -59,5 +65,49 @@ public class ChatController {
                                         "Error: " + error.getMessage());
                             }
                         });
+    }
+
+    /**
+     * Reliable HTTP chat endpoint used as frontend fallback/primary path.
+     * This avoids dependency on WebSocket principal routing for single-response chat.
+     */
+    @PostMapping("/api/chat/message")
+    @ResponseBody
+    public Mono<Map<String, String>> sendMessageHttp(@RequestBody Map<String, String> request, Principal principal) {
+        String message = request.getOrDefault("message", "");
+        String conversationId = request.get("conversationId");
+        String userIdData = request.get("userId");
+
+        if (conversationId == null || conversationId.isBlank()) {
+            conversationId = UUID.randomUUID().toString();
+        }
+
+        if (message.isBlank()) {
+            return Mono.just(responsePayload("Please enter a message.", conversationId));
+        }
+
+        if (principal != null) {
+            log.info("HTTP Chat request from authenticated user: {}", principal.getName());
+        } else {
+            log.warn("HTTP Chat request from unauthenticated user.");
+        }
+
+        final String effectiveConversationId = conversationId;
+        return aiService.streamChat(message, effectiveConversationId, userIdData)
+                .next()
+                .defaultIfEmpty("I couldn't generate a response right now.")
+                .map(content -> responsePayload(content, effectiveConversationId))
+                .onErrorResume(error -> {
+                    log.error("HTTP chat error", error);
+                    return Mono.just(responsePayload("Sorry, I encountered an error: " + error.getMessage(),
+                            effectiveConversationId));
+                });
+    }
+
+    private Map<String, String> responsePayload(String response, String conversationId) {
+        Map<String, String> body = new HashMap<>();
+        body.put("response", response);
+        body.put("conversationId", conversationId);
+        return body;
     }
 }
