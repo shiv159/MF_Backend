@@ -80,10 +80,10 @@ public class RiskProfilingService implements IRiskProfilingService {
         int age = request.getDemographics().getAge();
         if (age < 35)
             score += 10;
-        else if (age > 50)
-            score -= 10;
         else if (age > 60)
             score -= 20;
+        else if (age > 50)
+            score -= 10;
 
         // 3. Financial Stability (Capacity)
         int emergencyMonths = request.getFinancials().getEmergencyFundMonths();
@@ -96,6 +96,8 @@ public class RiskProfilingService implements IRiskProfilingService {
         String reaction = request.getBehavioral().getMarketDropReaction();
         if ("PANIC_SELL".equalsIgnoreCase(reaction) || "SELL".equalsIgnoreCase(reaction)) {
             score -= 25; // Massive penalty for panic
+        } else if ("SELL_SOME".equalsIgnoreCase(reaction)) {
+            score -= 10; // Moderate penalty for partial panic behavior
         } else if ("BUY_MORE".equalsIgnoreCase(reaction)) {
             score += 15;
         }

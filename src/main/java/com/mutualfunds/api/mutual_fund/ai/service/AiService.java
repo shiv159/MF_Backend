@@ -41,18 +41,13 @@ public class AiService {
                 .build();
     }
 
-    public Flux<String> streamChat(String message, String conversationId, String userId) {
+    public Flux<String> streamChat(String message, String conversationId, UUID userId) {
         // Wrap entire operation in reactive chain to catch all exceptions
         return Mono.fromCallable(() -> {
             // Build portfolio context if userId is provided
             String portfolioContext = "";
-            if (userId != null && !userId.isBlank()) {
-                try {
-                    UUID userUUID = UUID.fromString(userId);
-                    portfolioContext = portfolioContextService.buildPortfolioContext(userUUID);
-                } catch (IllegalArgumentException e) {
-                    portfolioContext = "Unable to fetch portfolio data - invalid user ID.";
-                }
+            if (userId != null) {
+                portfolioContext = portfolioContextService.buildPortfolioContext(userId);
             } else {
                 portfolioContext = "No user portfolio data available. Provide general financial advice.";
             }

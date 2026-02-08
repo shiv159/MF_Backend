@@ -38,9 +38,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authz -> authz
                         // Allow CORS preflight requests without authentication
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // Chat endpoint uses permitAll due to SSE async dispatch security limitations
-                        // User context is passed via request body instead
+                        // Chat endpoint is guarded in ChatController via principal checks.
+                        // Keeping this permitAll avoids async dispatch auth loss with Mono HTTP responses.
                         .requestMatchers("/api/chat/**").permitAll()
+                        // WebSocket auth is enforced on STOMP CONNECT via JWT header interceptor
                         // WebSocket Handshake
                         .requestMatchers("/ws/**").permitAll()
                         // OAuth2 endpoints

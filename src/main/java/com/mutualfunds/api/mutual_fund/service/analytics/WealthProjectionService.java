@@ -46,7 +46,6 @@ public class WealthProjectionService {
 
     private WealthProjectionDTO runMonteCarloSimulation(double initialAmount, int years, double meanAnnualReturn,
             double annualStdDev) {
-        Random random = new Random();
         NormalDistribution normalDistribution = new NormalDistribution(0, 1); // Standard Normal
 
         // Storage for all paths: paths[year][simulation_index]
@@ -142,8 +141,8 @@ public class WealthProjectionService {
         // Try simple metadata first
         try {
             JsonNode meta = fund.getFundMetadataJson();
-            if (meta != null && meta.has("mstarpy_metadata")) {
-                JsonNode mstar = meta.get("mstarpy_metadata");
+            JsonNode mstar = resolveStatsNode(meta);
+            if (mstar != null) {
 
                 // Risk (StdDev)
                 double stdDev = 0.15; // default
@@ -180,5 +179,16 @@ public class WealthProjectionService {
         }
 
         return new PortfolioStats(0.12, 0.15); // Fallback to 12% Return, 15% Risk
+    }
+
+    private JsonNode resolveStatsNode(JsonNode meta) {
+        if (meta == null || meta.isNull()) {
+            return null;
+        }
+        if (meta.has("mstarpy_metadata") && meta.get("mstarpy_metadata").isObject()) {
+            return meta.get("mstarpy_metadata");
+        }
+        // Current canonical contract stores Morningstar fields at the root of fundMetadataJson
+        return meta;
     }
 }

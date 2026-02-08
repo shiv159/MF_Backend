@@ -112,8 +112,14 @@ public class RiskRecommendationService {
 
         // Normalize
         double total = equity + debt + gold;
-        if (total != 100) {
-            // simple normalization
+        if (total > 0) {
+            equity = roundTwoDecimals((equity / total) * 100.0);
+            debt = roundTwoDecimals((debt / total) * 100.0);
+            gold = roundTwoDecimals((gold / total) * 100.0);
+
+            // absorb rounding drift into debt bucket for consistent total
+            double drift = roundTwoDecimals(100.0 - (equity + debt + gold));
+            debt = roundTwoDecimals(debt + drift);
         }
 
         return AssetAllocationDTO.builder()
@@ -142,6 +148,7 @@ public class RiskRecommendationService {
             categories.addAll(selectDebtFunds(allFunds, debtAmt, user.getInvestmentHorizonYears()));
         }
 
+        normalizeCategoryAllocations(categories);
         return categories;
     }
 
@@ -323,7 +330,7 @@ public class RiskRecommendationService {
 
         return RecommendationCategoryDTO.builder()
                 .allocationCategory(category)
-                .allocationPercent(100.0) // simplified
+                .allocationPercent(0.0) // computed after all categories are selected
                 .amount(amount)
                 .funds(List.of(fundDto))
                 .build();
@@ -367,5 +374,41 @@ public class RiskRecommendationService {
         health.setWealthProjection(projection);
 
         return health;
+    }
+
+    private void normalizeCategoryAllocations(List<RecommendationCategoryDTO> categories) {
+        if (categories == null || categories.isEmpty()) {
+            return;
+        }
+
+        double totalAmount = categories.stream()
+                .map(RecommendationCategoryDTO::getAmount)
+                .filter(Objects::nonNull)
+                .mapToDouble(Double::doubleValue)
+                .sum();
+
+        if (totalAmount <= 0) {
+            categories.forEach(cat -> cat.setAllocationPercent(0.0));
+            return;
+        }
+
+        double runningPercent = 0.0;
+        for (int i = 0; i < categories.size(); i++) {
+            RecommendationCategoryDTO category = categories.get(i);
+            double amount = category.getAmount() != null ? category.getAmount() : 0.0;
+
+            if (i == categories.size() - 1) {
+                category.setAllocationPercent(roundTwoDecimals(100.0 - runningPercent));
+                continue;
+            }
+
+            double pct = roundTwoDecimals((amount / totalAmount) * 100.0);
+            category.setAllocationPercent(pct);
+            runningPercent += pct;
+        }
+    }
+
+    private double roundTwoDecimals(double value) {
+        return Math.round(value * 100.0) / 100.0;
     }
 }
