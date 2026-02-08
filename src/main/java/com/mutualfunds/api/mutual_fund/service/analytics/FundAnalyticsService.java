@@ -354,10 +354,10 @@ public class FundAnalyticsService {
             throw new IllegalArgumentException("No funds found");
         }
 
-        return calculatePortfolioCovariance(funds, weights);
+        return calculatePortfolioCovarianceFromFunds(funds, weights);
     }
 
-    public PortfolioCovarianceDTO calculatePortfolioCovariance(List<Fund> funds, Map<UUID, Double> weights) {
+    public PortfolioCovarianceDTO calculatePortfolioCovarianceFromFunds(List<Fund> funds, Map<UUID, Double> weights) {
         int n = funds.size();
 
         // Extract monthly returns for each fund
@@ -397,8 +397,9 @@ public class FundAnalyticsService {
         for (int i = 0; i < n; i++) {
             if (alignedReturns[i].length > 0) {
                 means[i] = Arrays.stream(alignedReturns[i]).average().orElse(0);
+                final double mean = means[i]; // Capture for lambda
                 double variance = Arrays.stream(alignedReturns[i])
-                        .map(r -> Math.pow(r - means[i], 2))
+                        .map(r -> Math.pow(r - mean, 2))
                         .average().orElse(0);
                 stdDevs[i] = Math.sqrt(variance);
             }
