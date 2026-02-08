@@ -14,7 +14,6 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class FundAnalyticsController {
 
     private final FundAnalyticsService fundAnalyticsService;
