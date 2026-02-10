@@ -16,6 +16,7 @@ import java.util.UUID;
 public class AiService {
 
     private final ChatClient chatClient;
+    private final ChatClient diagnosticClient;
     private final PortfolioContextService portfolioContextService;
 
     public AiService(ChatClient.Builder builder, PortfolioContextService portfolioContextService) {
@@ -39,6 +40,61 @@ public class AiService {
                                 """)
                 .defaultAdvisors(new MessageChatMemoryAdvisor(new InMemoryChatMemory()))
                 .build();
+
+        // Separate client for diagnostic insights — no chat memory, structured output
+        // prompt
+        this.diagnosticClient = builder
+                .defaultSystem(
+                        """
+                                You are a mutual fund portfolio analyst. You will receive structured diagnostic data
+                                about a user's portfolio including metrics, detected issues, and their severity.
+
+                                Your job is to generate personalized, actionable insights. Respond ONLY with valid JSON
+                                (no markdown, no code fences) matching this exact structure:
+
+                                {
+                                  "summary": "2-4 sentence portfolio health overview using specific numbers",
+                                  "suggestionMessages": {
+                                    "ISSUE_CATEGORY": "Personalized actionable advice for this specific issue"
+                                  },
+                                  "strengths": ["strength 1", "strength 2", "strength 3"]
+                                }
+
+                                RULES:
+                                - summary: 2-4 sentences, under 80 words, factual with specific numbers
+                                - suggestionMessages: one entry per detected issue category, personalized and actionable,
+                                  reference specific fund names/AMCs/sectors from the data
+                                - strengths: 2-3 genuine positives about the portfolio, be specific not generic
+                                - Use Indian Rupee (₹) for currency amounts
+                                - Be direct and conversational, not corporate
+                                - Do NOT include any disclaimers or warnings about seeking professional advice
+                                - Do NOT wrap the response in markdown code blocks
+                                """)
+                .build();
+    }
+
+    /**
+     * Generate AI-powered diagnostic insights: summary, suggestion messages, and
+     * strengths.
+     * Returns raw JSON string to be parsed by the caller.
+     *
+     * @param diagnosticContext Text representation of portfolio metrics and
+     *                          detected issues
+     * @return JSON string with summary, suggestionMessages, and strengths; or empty
+     *         string on failure
+     */
+    public String generateDiagnosticInsights(String diagnosticContext) {
+        try {
+            log.info("Generating AI diagnostic insights");
+            String response = this.diagnosticClient.prompt()
+                    .user(diagnosticContext)
+                    .call()
+                    .content();
+            return response != null ? response.trim() : "";
+        } catch (Exception e) {
+            log.error("Failed to generate AI diagnostic insights: {}", e.getMessage());
+            return ""; // Fallback: caller will use template messages
+        }
     }
 
     public Flux<String> streamChat(String message, String conversationId, UUID userId) {
