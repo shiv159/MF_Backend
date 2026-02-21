@@ -162,8 +162,9 @@ public class ManualSelectionService implements IManualSelectionService {
                             etlRequests.get(j).getFundName(), selectionIndex);
                     ManualSelectionResult failedResult = results.get(selectionIndex);
                     failedResult.setStatus("ENRICHMENT_FAILED");
-                    failedResult
-                            .setMessage("ETL could not resolve this fund. Please check the fund name and try again.");
+                    failedResult.setMessage(
+                            "ETL could not resolve this fund. It has been excluded and the remaining " +
+                                    "funds' weights have been re-normalised to 100%.");
                     continue;
                 }
 
@@ -214,6 +215,32 @@ public class ManualSelectionService implements IManualSelectionService {
         }
 
         userHoldingRepository.saveAll(newHoldings);
+
+        // 5) Re-normalise weights if any funds were skipped due to enrichment failure.
+        // Without this, the saved weights sum to less than 100%, which skews analytics.
+        if (!failedIndexes.isEmpty() && !newHoldings.isEmpty()) {
+            int resolvedTotalWeight = newHoldings.stream()
+                    .mapToInt(h -> h.getWeightPct() != null ? h.getWeightPct() : 0)
+                    .sum();
+            if (resolvedTotalWeight > 0 && resolvedTotalWeight != 100) {
+                log.warn("Re-normalising weights from {}% to 100% after {} fund(s) failed enrichment.",
+                        resolvedTotalWeight, failedIndexes.size());
+                int runningTotal = 0;
+                for (int k = 0; k < newHoldings.size(); k++) {
+                    UserHolding h = newHoldings.get(k);
+                    if (k == newHoldings.size() - 1) {
+                        // Assign remainder to the last fund to avoid rounding drift
+                        h.setWeightPct(100 - runningTotal);
+                    } else {
+                        int normalised = (int) Math.round(h.getWeightPct() * 100.0 / resolvedTotalWeight);
+                        h.setWeightPct(normalised);
+                        runningTotal += normalised;
+                    }
+                }
+                // Persist the updated weights
+                userHoldingRepository.saveAll(newHoldings);
+            }
+        }
 
         ManualSelectionPortfolio portfolio = buildPortfolioResponse(newHoldings);
 
