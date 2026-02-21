@@ -61,11 +61,19 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
                 throw new RuntimeException("ETL service enrichment failed - null response");
             }
 
-            if (!"completed".equalsIgnoreCase(response.getStatus())) {
-                log.error("ETL service returned non-completed status: {}", response.getStatus());
-                log.error("Error message from ETL: {}", response.getErrorMessage());
-                throw new RuntimeException("ETL service enrichment failed with status: " + response.getStatus() + " - "
-                        + response.getErrorMessage());
+            String etlStatus = response.getStatus();
+            if ("failed".equalsIgnoreCase(etlStatus)) {
+                log.error("ETL service returned failed status. Error: {}", response.getErrorMessage());
+                throw new RuntimeException("ETL service enrichment failed: " + response.getErrorMessage());
+            } else if ("partial".equalsIgnoreCase(etlStatus)) {
+                int succeeded = response.getEnrichmentQuality() != null
+                        ? response.getEnrichmentQuality().getSuccessfullyEnriched()
+                        : 0;
+                log.warn("ETL returned partial results: {} of {} funds enriched. Proceeding with available data.",
+                        succeeded, enrichmentData.size());
+            } else if (!"completed".equalsIgnoreCase(etlStatus)) {
+                log.error("ETL service returned unrecognised status: {}", etlStatus);
+                throw new RuntimeException("ETL service returned unrecognised status: " + etlStatus);
             }
 
             log.info("ETL enrichment completed successfully");

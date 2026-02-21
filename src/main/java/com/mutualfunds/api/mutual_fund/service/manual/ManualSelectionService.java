@@ -89,9 +89,10 @@ public class ManualSelectionService implements IManualSelectionService {
             }
 
             // Check if existing fund data is fresh (within a week)
-            boolean isFreshData = existingFund != null && 
+            boolean isFreshData = existingFund != null &&
                     existingFund.getLastUpdated() != null &&
-                    existingFund.getLastUpdated().isAfter(LocalDateTime.now().minusWeeks(1));
+                    existingFund.getLastUpdated().isAfter(LocalDateTime.now().minusWeeks(1)) &&
+                    existingFund.getCurrentNav() != null; // Require valid NAV — don't serve incomplete cached records
 
             if (isFreshData) {
                 // Use existing fund from database
@@ -108,8 +109,8 @@ public class ManualSelectionService implements IManualSelectionService {
             } else {
                 // Call ETL to get fresh data
                 etlIndexes.add(i);
-                String fundNameForEtl = inputFundName != null ? inputFundName : 
-                        (existingFund != null ? existingFund.getFundName() : "Unknown");
+                String fundNameForEtl = inputFundName != null ? inputFundName
+                        : (existingFund != null ? existingFund.getFundName() : "Unknown");
                 etlRequests.add(ParsedHoldingEntry.builder()
                         .fundName(fundNameForEtl)
                         .units(1.0)
@@ -118,9 +119,8 @@ public class ManualSelectionService implements IManualSelectionService {
                         .inputFundId(item.getFundId())
                         .inputFundName(item.getFundName())
                         .status(STATUS_ENRICHED_FROM_ETL)
-                        .message(existingFund != null ? 
-                                "Refreshing from ETL (data is stale)" : 
-                                "Fetching from ETL (new fund)")
+                        .message(existingFund != null ? "Refreshing from ETL (data is stale)"
+                                : "Fetching from ETL (new fund)")
                         .build());
             }
         }
@@ -135,20 +135,41 @@ public class ManualSelectionService implements IManualSelectionService {
             }
 
             List<Map<String, Object>> enrichedData = enrichmentResult.getEnrichedData();
-            if (enrichedData == null || enrichedData.size() != etlRequests.size()) {
-                throw new ServiceUnavailableException(
-                        "ETL",
-                        "ETL returned unexpected result count. Expected " + etlRequests.size() + ", got " +
-                                (enrichedData == null ? 0 : enrichedData.size()));
+
+            // Build a name-based map so we can match enriched results back to each
+            // requested fund individually, without requiring a 1:1 positional alignment.
+            // This handles partial ETL results (status="partial") gracefully.
+            Map<String, Map<String, Object>> enrichedByName = new java.util.HashMap<>();
+            if (enrichedData != null) {
+                for (Map<String, Object> em : enrichedData) {
+                    Object fn = em.get("fund_name");
+                    if (fn == null)
+                        fn = em.get("fundName");
+                    if (fn != null) {
+                        enrichedByName.put(fn.toString().toLowerCase().trim(), em);
+                    }
+                }
             }
 
-            for (int j = 0; j < enrichedData.size(); j++) {
+            for (int j = 0; j < etlRequests.size(); j++) {
                 int selectionIndex = etlIndexes.get(j);
-                Map<String, Object> enrichedMap = enrichedData.get(j);
+                String requestedName = etlRequests.get(j).getFundName().toLowerCase().trim();
+                Map<String, Object> enrichedMap = enrichedByName.get(requestedName);
+
+                if (enrichedMap == null) {
+                    // This specific fund failed enrichment — mark it and continue with others
+                    log.warn("ETL could not enrich fund '{}' (index {}). Marking as failed.",
+                            etlRequests.get(j).getFundName(), selectionIndex);
+                    ManualSelectionResult failedResult = results.get(selectionIndex);
+                    failedResult.setStatus("ENRICHMENT_FAILED");
+                    failedResult
+                            .setMessage("ETL could not resolve this fund. Please check the fund name and try again.");
+                    continue;
+                }
+
                 FundUpsertOutcome upsertOutcome = upsertFundFromEtl(enrichedMap);
                 resolvedFundsByIndex.put(selectionIndex, upsertOutcome.fund());
 
-                // fill in result fields
                 ManualSelectionResult existing = results.get(selectionIndex);
                 existing.setFundId(upsertOutcome.fund().getFundId());
                 existing.setFundName(upsertOutcome.fund().getFundName());
@@ -157,27 +178,33 @@ public class ManualSelectionService implements IManualSelectionService {
             }
         }
 
-        // 3) Validate no duplicates after resolution
-        validateNoDuplicateFunds(resolvedFundsByIndex, selections.size());
+        // 3) Collect failed indexes and validate no duplicates among resolved funds
+        Set<Integer> failedIndexes = new java.util.HashSet<>();
+        for (int i = 0; i < selections.size(); i++) {
+            if (resolvedFundsByIndex.get(i) == null) {
+                failedIndexes.add(i);
+            }
+        }
+        validateNoDuplicateFunds(resolvedFundsByIndex, selections.size(), failedIndexes);
 
         // 4) Replace holdings + allocations atomically
         userHoldingRepository.deleteByUser_UserId(userId);
 
         // Ensure deletes are executed before the following batch insert.
         // Without this, Hibernate may order INSERTs before DELETEs within the same
-        // transaction,
-        // causing (user_id, fund_id) unique constraint violations.
+        // transaction, causing (user_id, fund_id) unique constraint violations.
         userHoldingRepository.flush();
 
         List<UserHolding> newHoldings = new ArrayList<>(selections.size());
 
         for (int i = 0; i < selections.size(); i++) {
             Fund fund = resolvedFundsByIndex.get(i);
-            Integer weightPct = weightPctByIndex.get(i);
             if (fund == null) {
-                throw new BadRequestException("Unable to resolve fund for selection index: " + i);
+                // Fund failed ETL enrichment — already flagged in results, skip it
+                log.warn("Skipping holding at index {} — fund could not be resolved.", i);
+                continue;
             }
-
+            Integer weightPct = weightPctByIndex.get(i);
             UserHolding holding = UserHolding.builder()
                     .user(currentUser)
                     .fund(fund)
@@ -224,16 +251,20 @@ public class ManualSelectionService implements IManualSelectionService {
         }
     }
 
-    private void validateNoDuplicateFunds(Map<Integer, Fund> resolvedFundsByIndex, int expectedCount) {
-        if (resolvedFundsByIndex.size() != expectedCount) {
-            throw new BadRequestException("Some funds could not be resolved");
+    private void validateNoDuplicateFunds(Map<Integer, Fund> resolvedFundsByIndex, int totalCount,
+            Set<Integer> failedIndexes) {
+        // Only resolved (non-failed) funds count toward the expected size
+        int expectedResolved = totalCount - failedIndexes.size();
+        if (resolvedFundsByIndex.size() != expectedResolved) {
+            throw new BadRequestException("Some funds could not be resolved after ETL enrichment");
         }
 
+        // Duplicate check only applies to funds that were resolved
         Set<UUID> uniqueFundIds = resolvedFundsByIndex.values().stream()
                 .map(Fund::getFundId)
                 .collect(Collectors.toSet());
 
-        if (uniqueFundIds.size() != expectedCount) {
+        if (uniqueFundIds.size() != expectedResolved) {
             throw new BadRequestException("Duplicate funds detected in selections after resolution");
         }
     }
@@ -255,6 +286,13 @@ public class ManualSelectionService implements IManualSelectionService {
 
         if (isin == null || fundName == null) {
             throw new ServiceUnavailableException("ETL", "ETL response missing required fields (isin/fundName)");
+        }
+        // Require a valid NAV — a fund without NAV means enrichment was incomplete
+        // and should not be written to the DB.
+        if (currentNav == null) {
+            throw new ServiceUnavailableException("ETL",
+                    "ETL enrichment for '" + fundName + "' is incomplete: currentNav is null. " +
+                            "The fund will not be saved. Please retry.");
         }
 
         Optional<Fund> existing = fundRepository.findByIsin(isin);
