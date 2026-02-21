@@ -21,57 +21,53 @@ public class AiService {
 
     public AiService(ChatClient.Builder builder, PortfolioContextService portfolioContextService) {
         this.portfolioContextService = portfolioContextService;
+        // Build raw clients without mutating the shared builder's system prompt
         this.chatClient = builder
-                .defaultSystem(
-                        """
-                                You are a concise financial advisor for mutual fund portfolios.
-
-                                RESPONSE STYLE:
-                                - Keep responses SHORT (3-5 sentences max for simple questions)
-                                - Use bullet points for multiple items
-                                - Lead with the key insight/answer
-                                - Skip generic disclaimers unless specifically relevant
-                                - Only elaborate if the user asks for details
-
-                                FOCUS ON:
-                                - Direct answers to questions
-                                - Actionable observations
-                                - Key numbers (P&L, allocation %)
-                                """)
                 .defaultAdvisors(new MessageChatMemoryAdvisor(new InMemoryChatMemory()))
                 .build();
 
-        // Separate client for diagnostic insights — no chat memory, structured output
-        // prompt
-        this.diagnosticClient = builder
-                .defaultSystem(
-                        """
-                                You are a mutual fund portfolio analyst. You will receive structured diagnostic data
-                                about a user's portfolio including metrics, detected issues, and their severity.
-
-                                Your job is to generate personalized, actionable insights. Respond ONLY with valid JSON
-                                (no markdown, no code fences) matching this exact structure:
-
-                                {
-                                  "summary": "2-4 sentence portfolio health overview using specific numbers",
-                                  "suggestionMessages": {
-                                    "ISSUE_CATEGORY": "Personalized actionable advice for this specific issue"
-                                  },
-                                  "strengths": ["strength 1", "strength 2", "strength 3"]
-                                }
-
-                                RULES:
-                                - summary: 2-4 sentences, under 80 words, factual with specific numbers
-                                - suggestionMessages: one entry per detected issue category, personalized and actionable,
-                                  reference specific fund names/AMCs/sectors from the data
-                                - strengths: 2-3 genuine positives about the portfolio, be specific not generic
-                                - Use Indian Rupee (₹) for currency amounts
-                                - Be direct and conversational, not corporate
-                                - Do NOT include any disclaimers or warnings about seeking professional advice
-                                - Do NOT wrap the response in markdown code blocks
-                                """)
-                .build();
+        this.diagnosticClient = builder.build();
     }
+
+    private static final String CHAT_SYSTEM_PROMPT = """
+            You are a highly concise financial assistant. You are chatting with a user about their mutual fund portfolio.
+            You will be provided with their Portfolio Data and their Question.
+
+            STRICT FORMATTING RULES:
+            1. EXTREME BREVITY: Your entire response MUST NOT exceed 150 words.
+            2. NO EXHAUSTIVE SUMMARIES: Do NOT summarize the entire portfolio unless explicitly asked. Answer exactly what is asked and nothing more.
+            3. SCANNABILITY: Use short bullet points (max 3 bullets). Use **bold text** for important numbers or fund names.
+            4. TONE: Conversational, direct, and crisp. No fluff, no introductory/concluding essays.
+            5. DISCLAIMERS: Never include financial disclaimers.
+
+            If the user asks a general question like "Analyze my portfolio", provide a 3-4 sentence high-level observation highlighting only the most critical risk or strength, not a full breakdown.
+            """;
+
+    private static final String DIAGNOSTIC_SYSTEM_PROMPT = """
+            You are a mutual fund portfolio analyst. You will receive structured diagnostic data
+            about a user's portfolio including metrics, detected issues, and their severity.
+
+            Your job is to generate personalized, actionable insights. Respond ONLY with valid JSON
+            (no markdown, no code fences) matching this exact structure:
+
+            {
+              "summary": "2-4 sentence portfolio health overview using specific numbers",
+              "suggestionMessages": {
+                "ISSUE_CATEGORY": "Personalized actionable advice for this specific issue"
+              },
+              "strengths": ["strength 1", "strength 2", "strength 3"]
+            }
+
+            RULES:
+            - summary: 2-4 sentences, under 80 words, factual with specific numbers
+            - suggestionMessages: one entry per detected issue category, personalized and actionable,
+              reference specific fund names/AMCs/sectors from the data
+            - strengths: 2-3 genuine positives about the portfolio, be specific not generic
+            - Use Indian Rupee (₹) for currency amounts
+            - Be direct and conversational, not corporate
+            - Do NOT include any disclaimers or warnings about seeking professional advice
+            - Do NOT wrap the response in markdown code blocks
+            """;
 
     /**
      * Generate AI-powered diagnostic insights: summary, suggestion messages, and
@@ -87,6 +83,7 @@ public class AiService {
         try {
             log.info("Generating AI diagnostic insights");
             String response = this.diagnosticClient.prompt()
+                    .system(DIAGNOSTIC_SYSTEM_PROMPT)
                     .user(diagnosticContext)
                     .call()
                     .content();
@@ -117,6 +114,7 @@ public class AiService {
 
             // Make the AI call
             String fullResponse = this.chatClient.prompt()
+                    .system(CHAT_SYSTEM_PROMPT)
                     .user(enrichedMessage)
                     .advisors(a -> a.param(MessageChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId))
                     .call()
