@@ -1,82 +1,58 @@
 package com.mutualfunds.api.mutual_fund.ai.controller;
 
-import com.mutualfunds.api.mutual_fund.ai.service.AiService;
+import com.mutualfunds.api.mutual_fund.ai.chat.dto.ChatMessageRequest;
+import com.mutualfunds.api.mutual_fund.ai.chat.dto.ChatStreamEvent;
+import com.mutualfunds.api.mutual_fund.ai.chat.dto.StarterPromptsResponse;
+import com.mutualfunds.api.mutual_fund.ai.chat.service.PortfolioAgentService;
+import com.mutualfunds.api.mutual_fund.ai.chat.service.StarterPromptService;
 import com.mutualfunds.api.mutual_fund.security.UserPrincipal;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.security.core.Authentication;
-import org.springframework.stereotype.Controller;
-import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
-import java.security.Principal;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 
-@Controller
+import static org.springframework.http.HttpStatus.UNAUTHORIZED;
+
+@RestController
+@RequestMapping("/api/chat")
 @RequiredArgsConstructor
-@Slf4j
 public class ChatController {
 
-    private final AiService aiService;
+    private final PortfolioAgentService portfolioAgentService;
+    private final StarterPromptService starterPromptService;
 
-    /**
-     * HTTP chat endpoint used by frontend chat UI.
-     */
-    @PostMapping("/api/chat/message")
-    @ResponseBody
-    public Mono<Map<String, String>> sendMessageHttp(@RequestBody Map<String, String> request, Principal principal) {
-        if (principal == null) {
-            return Mono.error(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required"));
-        }
-
-        UUID userId = extractAuthenticatedUserId(principal);
-        if (userId == null) {
-            return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN, "Unable to resolve user context"));
-        }
-
-        String message = request.getOrDefault("message", "");
-        String conversationId = request.get("conversationId");
-
-        if (conversationId == null || conversationId.isBlank()) {
-            conversationId = UUID.randomUUID().toString();
-        }
-
-        if (message.isBlank()) {
-            return Mono.just(responsePayload("Please enter a message.", conversationId));
-        }
-
-        final String effectiveConversationId = conversationId;
-        return aiService.streamChat(message, effectiveConversationId, userId)
-                .next()
-                .defaultIfEmpty("I couldn't generate a response right now.")
-                .map(content -> responsePayload(content, effectiveConversationId))
-                .onErrorResume(error -> {
-                    log.error("HTTP chat error", error);
-                    return Mono.just(responsePayload("Sorry, I encountered an error: " + error.getMessage(),
-                            effectiveConversationId));
-                });
+    @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<ChatStreamEvent>> streamMessage(@Valid @RequestBody ChatMessageRequest request,
+            Authentication authentication) {
+        UUID userId = extractUserId(authentication);
+        return portfolioAgentService.streamMessage(userId, request)
+                .map(event -> ServerSentEvent.<ChatStreamEvent>builder()
+                        .event(event.getType())
+                        .data(event)
+                        .build());
     }
 
-    private UUID extractAuthenticatedUserId(Principal principal) {
-        if (principal instanceof Authentication authentication) {
-            Object authPrincipal = authentication.getPrincipal();
-            if (authPrincipal instanceof UserPrincipal userPrincipal) {
-                return userPrincipal.getUserId();
-            }
-        }
-        return null;
+    @GetMapping("/starter-prompts")
+    public StarterPromptsResponse getStarterPrompts(@RequestParam(required = false) String screenContext,
+            Authentication authentication) {
+        return starterPromptService.getStarterPrompts(extractUserId(authentication), screenContext);
     }
 
-    private Map<String, String> responsePayload(String response, String conversationId) {
-        Map<String, String> body = new HashMap<>();
-        body.put("response", response);
-        body.put("conversationId", conversationId);
-        return body;
+    private UUID extractUserId(Authentication authentication) {
+        if (authentication == null || !(authentication.getPrincipal() instanceof UserPrincipal userPrincipal)) {
+            throw new ResponseStatusException(UNAUTHORIZED, "Authentication required");
+        }
+        return userPrincipal.getUserId();
     }
 }

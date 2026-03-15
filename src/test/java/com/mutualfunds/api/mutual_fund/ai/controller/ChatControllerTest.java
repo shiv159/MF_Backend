@@ -1,20 +1,23 @@
 package com.mutualfunds.api.mutual_fund.ai.controller;
 
-import com.mutualfunds.api.mutual_fund.ai.service.AiService;
+import com.mutualfunds.api.mutual_fund.ai.chat.dto.ChatMessageRequest;
+import com.mutualfunds.api.mutual_fund.ai.chat.dto.ChatStreamEvent;
+import com.mutualfunds.api.mutual_fund.ai.chat.service.PortfolioAgentService;
+import com.mutualfunds.api.mutual_fund.ai.chat.service.StarterPromptService;
 import com.mutualfunds.api.mutual_fund.security.UserPrincipal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 
 import java.security.Principal;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,36 +30,51 @@ import static org.mockito.Mockito.when;
 class ChatControllerTest {
 
     @Mock
-    private AiService aiService;
+    private PortfolioAgentService portfolioAgentService;
+
+    @Mock
+    private StarterPromptService starterPromptService;
 
     @InjectMocks
     private ChatController chatController;
 
     @Test
-    void sendMessageHttpRejectsUnauthenticatedRequests() {
-        Map<String, String> request = Map.of("message", "hello");
+    void streamMessageRejectsUnauthenticatedRequests() {
+        ChatMessageRequest request = ChatMessageRequest.builder()
+                .message("hello")
+                .build();
 
-        assertThrows(ResponseStatusException.class, () -> chatController.sendMessageHttp(request, null).block());
+        assertThrows(ResponseStatusException.class, () -> chatController.streamMessage(request, null));
     }
 
     @Test
-    void sendMessageHttpUsesAuthenticatedPrincipalUserId() {
+    void streamMessageUsesAuthenticatedPrincipalUserId() {
         UUID authenticatedUserId = UUID.randomUUID();
         Principal principal = authenticatedPrincipal(authenticatedUserId);
 
-        when(aiService.streamChat(eq("hello"), eq("conv-1"), eq(authenticatedUserId)))
-                .thenReturn(Flux.just("secured-response"));
+        ChatMessageRequest request = ChatMessageRequest.builder()
+                .message("hello")
+                .conversationId("conv-1")
+                .screenContext("LANDING")
+                .build();
 
-        Map<String, String> request = new HashMap<>();
-        request.put("message", "hello");
-        request.put("conversationId", "conv-1");
-        request.put("userId", UUID.randomUUID().toString()); // spoofed payload value should be ignored
+        ChatStreamEvent response = ChatStreamEvent.builder()
+                .type("status")
+                .conversationId("conv-1")
+                .build();
 
-        Map<String, String> response = chatController.sendMessageHttp(request, principal).block();
+        when(portfolioAgentService.streamMessage(eq(authenticatedUserId), eq(request)))
+                .thenReturn(Flux.just(response));
 
-        assertThat(response).containsEntry("response", "secured-response");
-        assertThat(response).containsEntry("conversationId", "conv-1");
-        verify(aiService).streamChat("hello", "conv-1", authenticatedUserId);
+        List<ServerSentEvent<ChatStreamEvent>> events = chatController
+                .streamMessage(request, (UsernamePasswordAuthenticationToken) principal)
+                .collectList()
+                .block();
+
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0).data()).isEqualTo(response);
+        assertThat(events.get(0).event()).isEqualTo("status");
+        verify(portfolioAgentService).streamMessage(authenticatedUserId, request);
     }
 
     private Principal authenticatedPrincipal(UUID userId) {

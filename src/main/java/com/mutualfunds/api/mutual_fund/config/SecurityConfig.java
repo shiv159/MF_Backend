@@ -38,9 +38,6 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authz -> authz
                         // Allow CORS preflight requests without authentication
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        // Chat endpoint is guarded in ChatController via principal checks.
-                        // Keeping this permitAll avoids async dispatch auth loss with Mono HTTP responses.
-                        .requestMatchers("/api/chat/**").permitAll()
                         // OAuth2 endpoints
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/swagger-ui/**",

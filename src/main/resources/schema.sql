@@ -89,6 +89,21 @@ CREATE TABLE IF NOT EXISTS ai_insights (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Portfolio Alerts table
+CREATE TABLE IF NOT EXISTS portfolio_alerts (
+    alert_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    payload_json JSONB,
+    status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
+    dedupe_key VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indices
 CREATE INDEX IF NOT EXISTS idx_user_holdings_user ON user_holdings(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_holdings_fund ON user_holdings(fund_id);
@@ -96,3 +111,5 @@ CREATE INDEX IF NOT EXISTS idx_ai_insights_user ON ai_insights(user_id);
 CREATE INDEX IF NOT EXISTS idx_portfolio_uploads_user ON portfolio_uploads(user_id);
 CREATE INDEX IF NOT EXISTS idx_funds_isin ON funds(isin);
 CREATE INDEX IF NOT EXISTS idx_funds_category ON funds(fund_category);
+CREATE INDEX IF NOT EXISTS idx_portfolio_alerts_user_status ON portfolio_alerts(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_portfolio_alerts_dedupe ON portfolio_alerts(user_id, dedupe_key);
