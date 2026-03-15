@@ -4,6 +4,7 @@ import com.mutualfunds.api.mutual_fund.dto.response.DashboardResponse;
 import com.mutualfunds.api.mutual_fund.service.contract.IDashboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -33,8 +34,9 @@ public class DashboardController {
      * @return DashboardResponse with user data
      */
     @GetMapping("/me")
+    @Deprecated(forRemoval = true, since = "2026-03")
     public ResponseEntity<DashboardResponse> getDashboard() {
-        log.info("Dashboard /me request received");
+        log.warn("Deprecated endpoint /api/dashboard/me called");
 
         // Get authentication from SecurityContext
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -55,6 +57,10 @@ public class DashboardController {
         DashboardResponse dashboard = dashboardService.getDashboardData(userId);
 
         log.info("Dashboard successfully retrieved");
-        return ResponseEntity.ok(dashboard);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.WARNING, "299 - \"/api/dashboard/me is deprecated and scheduled for removal\"")
+                .header("Deprecation", "true")
+                .header("Sunset", "2026-06-30")
+                .body(dashboard);
     }
 }

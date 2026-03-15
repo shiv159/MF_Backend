@@ -41,9 +41,6 @@ public class SecurityConfig {
                         // Chat endpoint is guarded in ChatController via principal checks.
                         // Keeping this permitAll avoids async dispatch auth loss with Mono HTTP responses.
                         .requestMatchers("/api/chat/**").permitAll()
-                        // WebSocket auth is enforced on STOMP CONNECT via JWT header interceptor
-                        // WebSocket Handshake
-                        .requestMatchers("/ws/**").permitAll()
                         // OAuth2 endpoints
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/swagger-ui/**",

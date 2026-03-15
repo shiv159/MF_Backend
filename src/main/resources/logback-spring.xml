@@ -7,7 +7,6 @@
         <property name="SECURITY_LOG_LEVEL" value="DEBUG"/>
         <property name="HIBERNATE_SQL_LOG_LEVEL" value="DEBUG"/>
         <property name="HIBERNATE_BIND_LOG_LEVEL" value="TRACE"/>
-        <property name="WS_STATS_LOG_LEVEL" value="INFO"/>
         <property name="LOG_FILE" value="logs/mutual-fund-app.log"/>
     </springProfile>
     
@@ -17,7 +16,6 @@
         <property name="SECURITY_LOG_LEVEL" value="INFO"/>
         <property name="HIBERNATE_SQL_LOG_LEVEL" value="WARN"/>
         <property name="HIBERNATE_BIND_LOG_LEVEL" value="WARN"/>
-        <property name="WS_STATS_LOG_LEVEL" value="WARN"/>
         <property name="LOG_FILE" value="logs/mutual-fund-app.log"/>
     </springProfile>
 
@@ -66,7 +64,6 @@
     <logger name="org.springframework.web" level="INFO"/>
     <logger name="org.springframework.security" level="${SECURITY_LOG_LEVEL}"/>
     <logger name="org.springframework.data" level="INFO"/>
-    <logger name="org.springframework.web.socket.config.WebSocketMessageBrokerStats" level="${WS_STATS_LOG_LEVEL}"/>
     
     <!-- Hibernate/JPA loggers -->
     <logger name="org.hibernate.SQL" level="${HIBERNATE_SQL_LOG_LEVEL}"/>

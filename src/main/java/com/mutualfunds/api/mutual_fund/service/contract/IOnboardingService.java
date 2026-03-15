@@ -2,8 +2,6 @@ package com.mutualfunds.api.mutual_fund.service.contract;
 
 import com.mutualfunds.api.mutual_fund.entity.PortfolioUpload;
 import com.mutualfunds.api.mutual_fund.entity.User;
-import com.mutualfunds.api.mutual_fund.dto.request.RiskProfileRequest;
-import com.mutualfunds.api.mutual_fund.dto.response.UploadResponse;
 
 import java.util.UUID;
 
@@ -21,14 +19,6 @@ public interface IOnboardingService {
      * @throws RuntimeException if user not found
      */
     User getCurrentUser();
-    
-    /**
-     * Update user's risk profile and investment parameters
-     * 
-     * @param request RiskProfileRequest with investment parameters
-     * @return Updated User entity
-     */
-    User updateRiskProfile(RiskProfileRequest request);
     
     /**
      * Create a new portfolio upload record

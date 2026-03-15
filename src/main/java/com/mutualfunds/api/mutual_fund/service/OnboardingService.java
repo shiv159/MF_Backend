@@ -8,7 +8,6 @@ import com.mutualfunds.api.mutual_fund.exception.UnauthorizedException;
 import com.mutualfunds.api.mutual_fund.repository.PortfolioUploadRepository;
 import com.mutualfunds.api.mutual_fund.repository.UserRepository;
 import com.mutualfunds.api.mutual_fund.service.contract.IOnboardingService;
-import com.mutualfunds.api.mutual_fund.dto.request.RiskProfileRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -50,28 +49,6 @@ public class OnboardingService implements IOnboardingService {
 
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
-    }
-
-    /**
-     * Update user's risk profile and investment parameters
-     * 
-     * @param request RiskProfileRequest with investment parameters
-     * @return Updated User entity
-     */
-    @Override
-    public User updateRiskProfile(RiskProfileRequest request) {
-        User user = getCurrentUser();
-        log.debug("Updating risk profile");
-
-        user.setInvestmentHorizonYears(request.getHorizon());
-        user.setRiskTolerance(request.getRisk());
-        user.setMonthlySipAmount(request.getSip());
-        user.setPrimaryGoal(request.getGoal());
-
-        User updatedUser = userRepository.save(user);
-        log.info("Risk profile updated successfully");
-
-        return updatedUser;
     }
 
     /**

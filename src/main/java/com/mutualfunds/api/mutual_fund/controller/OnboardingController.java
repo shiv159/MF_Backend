@@ -12,6 +12,7 @@ import com.mutualfunds.api.mutual_fund.service.contract.IOnboardingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -63,8 +64,11 @@ public class OnboardingController {
      * @return UploadResponse with upload ID and status
      */
     @PostMapping("/uploads")
+    @Deprecated(forRemoval = true, since = "2026-03")
     public ResponseEntity<UploadResponse> uploadPortfolio(@RequestPart("file") MultipartFile file)
             throws IOException {
+        log.warn("Deprecated endpoint /api/onboarding/uploads called");
+
         // Get authenticated user ID from security context
         User currentUser = onboardingService.getCurrentUser();
         UUID userId = currentUser.getUserId();
@@ -101,8 +105,11 @@ public class OnboardingController {
         byte[] fileBytes = file.getBytes();
         uploadProcessingService.processUploadAsync(saved.getUploadId(), fileBytes, fileType);
 
-        return ResponseEntity.ok(
-                new UploadResponse(saved.getUploadId(), saved.getStatus() != null ? saved.getStatus().name() : null));
+        return ResponseEntity.ok()
+                .header(HttpHeaders.WARNING, "299 - \"/api/onboarding/uploads is deprecated and scheduled for removal\"")
+                .header("Deprecation", "true")
+                .header("Sunset", "2026-06-30")
+                .body(new UploadResponse(saved.getUploadId(), saved.getStatus() != null ? saved.getStatus().name() : null));
     }
 
     /**
@@ -129,7 +136,9 @@ public class OnboardingController {
     }
 
     @GetMapping("/uploads/{uploadId}")
+    @Deprecated(forRemoval = true, since = "2026-03")
     public ResponseEntity<UploadResponse> getUploadStatus(@PathVariable UUID uploadId) {
+        log.warn("Deprecated endpoint /api/onboarding/uploads/{uploadId} called");
         log.info("Checking upload status request");
 
         // Get authenticated user
@@ -149,6 +158,10 @@ public class OnboardingController {
         response.setUploadId(upload.getUploadId());
         response.setStatus(upload.getStatus() != null ? upload.getStatus().name() : null);
 
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.WARNING, "299 - \"/api/onboarding/uploads/{uploadId} is deprecated and scheduled for removal\"")
+                .header("Deprecation", "true")
+                .header("Sunset", "2026-06-30")
+                .body(response);
     }
 }

@@ -6,6 +6,8 @@ import com.mutualfunds.api.mutual_fund.dto.analytics.RiskInsightsDTO;
 import com.mutualfunds.api.mutual_fund.dto.analytics.RollingReturnsDTO;
 import com.mutualfunds.api.mutual_fund.service.analytics.FundAnalyticsService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,6 +16,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
+@Slf4j
 public class FundAnalyticsController {
 
     private final FundAnalyticsService fundAnalyticsService;
@@ -60,12 +63,18 @@ public class FundAnalyticsController {
      * }
      */
     @PostMapping("/portfolio/covariance")
+    @Deprecated(forRemoval = true, since = "2026-03")
     public ResponseEntity<PortfolioCovarianceDTO> getPortfolioCovariance(
             @RequestBody CovarianceRequest request) {
 
+        log.warn("Deprecated endpoint /api/v1/portfolio/covariance called");
         PortfolioCovarianceDTO result = fundAnalyticsService.calculatePortfolioCovariance(
                 request.getFundIds(),
                 request.toWeightMap());
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.WARNING, "299 - \"/api/v1/portfolio/covariance is deprecated and scheduled for removal\"")
+                .header("Deprecation", "true")
+                .header("Sunset", "2026-06-30")
+                .body(result);
     }
 }
