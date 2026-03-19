@@ -1,0 +1,66 @@
+package com.mutualfunds.api.mutual_fund.features.portfolio.dashboard.api;
+
+import com.mutualfunds.api.mutual_fund.features.portfolio.dashboard.dto.DashboardResponse;
+import com.mutualfunds.api.mutual_fund.features.portfolio.dashboard.api.IDashboardService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
+
+/**
+ * Dashboard controller
+ * Handles user dashboard data retrieval
+ * All endpoints require JWT authentication
+ */
+@RestController
+@RequestMapping("/api/dashboard")
+@RequiredArgsConstructor
+@Slf4j
+public class DashboardController {
+
+    private final IDashboardService dashboardService;
+
+    /**
+     * Get complete dashboard data for authenticated user
+     * User ID is extracted from the authenticated principal
+     * 
+     * @return DashboardResponse with user data
+     */
+    @GetMapping("/me")
+    @Deprecated(forRemoval = true, since = "2026-03")
+    public ResponseEntity<DashboardResponse> getDashboard() {
+        log.warn("Deprecated endpoint /api/dashboard/me called");
+
+        // Get authentication from SecurityContext
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.warn("User not authenticated");
+            return ResponseEntity.status(401).build();
+        }
+
+        // Extract user ID from our custom UserPrincipal
+        com.mutualfunds.api.mutual_fund.shared.security.UserPrincipal principal = (com.mutualfunds.api.mutual_fund.shared.security.UserPrincipal) authentication
+                .getPrincipal();
+
+        UUID userId = principal.getUserId();
+        log.info("Fetching dashboard data");
+
+        // Get dashboard data
+        DashboardResponse dashboard = dashboardService.getDashboardData(userId);
+
+        log.info("Dashboard successfully retrieved");
+        return ResponseEntity.ok()
+                .header(HttpHeaders.WARNING, "299 - \"/api/dashboard/me is deprecated and scheduled for removal\"")
+                .header("Deprecation", "true")
+                .header("Sunset", "2026-06-30")
+                .body(dashboard);
+    }
+}

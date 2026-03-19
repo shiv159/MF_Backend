@@ -1,10 +1,10 @@
-package com.mutualfunds.api.mutual_fund.ai.controller;
+package com.mutualfunds.api.mutual_fund.features.ai.api;
 
-import com.mutualfunds.api.mutual_fund.ai.chat.dto.ChatMessageRequest;
-import com.mutualfunds.api.mutual_fund.ai.chat.dto.ChatStreamEvent;
-import com.mutualfunds.api.mutual_fund.ai.chat.service.PortfolioAgentService;
-import com.mutualfunds.api.mutual_fund.ai.chat.service.StarterPromptService;
-import com.mutualfunds.api.mutual_fund.security.UserPrincipal;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatMessageRequest;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatStreamEvent;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.service.PortfolioAgentService;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.service.StarterPromptService;
+import com.mutualfunds.api.mutual_fund.shared.security.UserPrincipal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;

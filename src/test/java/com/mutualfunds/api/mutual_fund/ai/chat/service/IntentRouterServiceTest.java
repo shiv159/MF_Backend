@@ -1,6 +1,6 @@
-package com.mutualfunds.api.mutual_fund.ai.chat.service;
+package com.mutualfunds.api.mutual_fund.features.ai.chat.service;
 
-import com.mutualfunds.api.mutual_fund.ai.chat.model.ChatIntent;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ChatIntent;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

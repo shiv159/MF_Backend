@@ -56,9 +56,8 @@
     
     <!-- Application specific loggers -->
     <logger name="com.mutualfunds.api" level="${APP_LOG_LEVEL}"/>
-    <logger name="com.mutualfunds.api.mutual_fund.controller" level="${APP_LOG_LEVEL}"/>
-    <logger name="com.mutualfunds.api.mutual_fund.service" level="${APP_LOG_LEVEL}"/>
-    <logger name="com.mutualfunds.api.mutual_fund.exception" level="${APP_LOG_LEVEL}"/>
+    <logger name="com.mutualfunds.api.mutual_fund.features" level="${APP_LOG_LEVEL}"/>
+    <logger name="com.mutualfunds.api.mutual_fund.shared" level="${APP_LOG_LEVEL}"/>
     
     <!-- Spring Framework loggers -->
     <logger name="org.springframework.web" level="INFO"/>

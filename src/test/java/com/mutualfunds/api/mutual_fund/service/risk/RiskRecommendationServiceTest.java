@@ -1,15 +1,15 @@
-package com.mutualfunds.api.mutual_fund.service.risk;
+package com.mutualfunds.api.mutual_fund.features.risk.application;
 
-import com.mutualfunds.api.mutual_fund.dto.analytics.WealthProjectionDTO;
-import com.mutualfunds.api.mutual_fund.dto.risk.PortfolioHealthDTO;
-import com.mutualfunds.api.mutual_fund.dto.risk.RecommendationCategoryDTO;
-import com.mutualfunds.api.mutual_fund.dto.risk.RiskProfileResponse;
-import com.mutualfunds.api.mutual_fund.entity.Fund;
-import com.mutualfunds.api.mutual_fund.entity.User;
-import com.mutualfunds.api.mutual_fund.enums.RiskTolerance;
-import com.mutualfunds.api.mutual_fund.repository.FundRepository;
-import com.mutualfunds.api.mutual_fund.service.analytics.PortfolioAnalyzerService;
-import com.mutualfunds.api.mutual_fund.service.analytics.WealthProjectionService;
+import com.mutualfunds.api.mutual_fund.features.portfolio.analytics.dto.WealthProjectionDTO;
+import com.mutualfunds.api.mutual_fund.features.risk.dto.PortfolioHealthDTO;
+import com.mutualfunds.api.mutual_fund.features.risk.dto.RecommendationCategoryDTO;
+import com.mutualfunds.api.mutual_fund.features.risk.dto.RiskProfileResponse;
+import com.mutualfunds.api.mutual_fund.features.funds.domain.Fund;
+import com.mutualfunds.api.mutual_fund.features.users.domain.User;
+import com.mutualfunds.api.mutual_fund.features.users.domain.RiskTolerance;
+import com.mutualfunds.api.mutual_fund.features.funds.api.FundQueryService;
+import com.mutualfunds.api.mutual_fund.features.portfolio.analytics.application.PortfolioAnalyzerService;
+import com.mutualfunds.api.mutual_fund.features.portfolio.analytics.application.WealthProjectionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -33,7 +33,7 @@ import static org.mockito.Mockito.when;
 class RiskRecommendationServiceTest {
 
     @Mock
-    private FundRepository fundRepository;
+    private FundQueryService fundQueryService;
 
     @Mock
     private PortfolioAnalyzerService portfolioAnalyzerService;
@@ -54,8 +54,8 @@ class RiskRecommendationServiceTest {
         List<Fund> allFunds = List.of(largeCap, midCap, smallCap, corporateBond);
         Map<UUID, Fund> fundById = allFunds.stream().collect(Collectors.toMap(Fund::getFundId, f -> f));
 
-        when(fundRepository.findAll()).thenReturn(allFunds);
-        when(fundRepository.findById(any(UUID.class)))
+        when(fundQueryService.findAll()).thenReturn(allFunds);
+        when(fundQueryService.findById(any(UUID.class)))
                 .thenAnswer(invocation -> Optional.ofNullable(fundById.get(invocation.getArgument(0))));
         when(portfolioAnalyzerService.analyzePortfolio(any(List.class), any(Map.class)))
                 .thenReturn(PortfolioHealthDTO.builder().build());
