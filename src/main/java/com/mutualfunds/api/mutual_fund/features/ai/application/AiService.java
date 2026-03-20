@@ -3,7 +3,9 @@ package com.mutualfunds.api.mutual_fund.features.ai.application;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.memory.InMemoryChatMemory;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -23,7 +25,10 @@ public class AiService {
         this.portfolioContextService = portfolioContextService;
         // Build raw clients without mutating the shared builder's system prompt
         this.chatClient = builder
-                .defaultAdvisors(new MessageChatMemoryAdvisor(new InMemoryChatMemory()))
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(MessageWindowChatMemory.builder()
+                        .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                        .maxMessages(20)
+                        .build()).build())
                 .build();
 
         this.diagnosticClient = builder.build();
@@ -116,7 +121,7 @@ public class AiService {
             String fullResponse = this.chatClient.prompt()
                     .system(CHAT_SYSTEM_PROMPT)
                     .user(enrichedMessage)
-                    .advisors(a -> a.param(MessageChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY, conversationId))
+                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
                     .call()
                     .content();
 

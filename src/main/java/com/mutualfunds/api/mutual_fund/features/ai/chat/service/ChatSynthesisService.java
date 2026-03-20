@@ -6,7 +6,9 @@ import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ChatIntent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.memory.InMemoryChatMemory;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -35,7 +37,10 @@ public class ChatSynthesisService {
     public ChatSynthesisService(ChatClient.Builder builder, ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
         this.chatClient = builder
-                .defaultAdvisors(new MessageChatMemoryAdvisor(new InMemoryChatMemory()))
+                .defaultAdvisors(MessageChatMemoryAdvisor.builder(MessageWindowChatMemory.builder()
+                        .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                        .maxMessages(20)
+                        .build()).build())
                 .build();
     }
 
@@ -48,7 +53,7 @@ public class ChatSynthesisService {
             String response = chatClient.prompt()
                     .system(SYNTHESIS_PROMPT)
                     .user(buildPrompt(intent, screenContext, userMessage, toolPayload, warnings))
-                    .advisors(a -> a.param(MessageChatMemoryAdvisor.CHAT_MEMORY_CONVERSATION_ID_KEY,
+                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID,
                             effectiveConversationId))
                     .call()
                     .content();
