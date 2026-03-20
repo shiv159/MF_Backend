@@ -1,26 +1,21 @@
-package com.mutualfunds.api.mutual_fund.service.risk;
+package com.mutualfunds.api.mutual_fund.features.risk.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mutualfunds.api.mutual_fund.dto.risk.BehavioralDTO;
-import com.mutualfunds.api.mutual_fund.dto.risk.DemographicsDTO;
-import com.mutualfunds.api.mutual_fund.dto.risk.FinancialsDTO;
-import com.mutualfunds.api.mutual_fund.dto.risk.GoalDTO;
-import com.mutualfunds.api.mutual_fund.dto.risk.PreferencesDTO;
-import com.mutualfunds.api.mutual_fund.dto.risk.RiskProfileRequest;
-import com.mutualfunds.api.mutual_fund.entity.User;
-import com.mutualfunds.api.mutual_fund.enums.RiskTolerance;
-import com.mutualfunds.api.mutual_fund.repository.UserRepository;
-import org.junit.jupiter.api.AfterEach;
+import com.mutualfunds.api.mutual_fund.features.risk.dto.BehavioralDTO;
+import com.mutualfunds.api.mutual_fund.features.risk.dto.DemographicsDTO;
+import com.mutualfunds.api.mutual_fund.features.risk.dto.FinancialsDTO;
+import com.mutualfunds.api.mutual_fund.features.risk.dto.GoalDTO;
+import com.mutualfunds.api.mutual_fund.features.risk.dto.PreferencesDTO;
+import com.mutualfunds.api.mutual_fund.features.risk.dto.RiskProfileRequest;
+import com.mutualfunds.api.mutual_fund.features.users.domain.User;
+import com.mutualfunds.api.mutual_fund.features.users.domain.RiskTolerance;
+import com.mutualfunds.api.mutual_fund.features.users.api.UserAccountService;
+import com.mutualfunds.api.mutual_fund.shared.security.CurrentUserProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.AuthorityUtils;
-import org.springframework.security.core.context.SecurityContextHolder;
-
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,27 +25,24 @@ import static org.mockito.Mockito.when;
 class RiskProfilingServiceTest {
 
     @Mock
-    private UserRepository userRepository;
+    private UserAccountService userAccountService;
+
+    @Mock
+    private CurrentUserProvider currentUserProvider;
 
     private RiskProfilingService riskProfilingService;
 
     @BeforeEach
     void setUp() {
-        riskProfilingService = new RiskProfilingService(userRepository, new ObjectMapper());
-    }
-
-    @AfterEach
-    void tearDown() {
-        SecurityContextHolder.clearContext();
+        riskProfilingService = new RiskProfilingService(userAccountService, new ObjectMapper(), currentUserProvider);
     }
 
     @Test
     void sellSomeReactionAppliesPenalty() {
-        setAuthenticatedUser("user@example.com");
         User user = User.builder().email("user@example.com").build();
 
-        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(currentUserProvider.getCurrentUser()).thenReturn(user);
+        when(userAccountService.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         RiskProfileRequest request = buildRequest(
                 55,   // age
@@ -65,11 +57,10 @@ class RiskProfilingServiceTest {
 
     @Test
     void ageAboveSixtyUsesHigherPenaltyBand() {
-        setAuthenticatedUser("user@example.com");
         User user = User.builder().email("user@example.com").build();
 
-        when(userRepository.findByEmail("user@example.com")).thenReturn(Optional.of(user));
-        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(currentUserProvider.getCurrentUser()).thenReturn(user);
+        when(userAccountService.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         RiskProfileRequest request = buildRequest(
                 65,   // age > 60 should trigger stronger penalty
@@ -80,11 +71,6 @@ class RiskProfilingServiceTest {
         User updated = riskProfilingService.updateRiskProfile(request);
 
         assertThat(updated.getRiskTolerance()).isEqualTo(RiskTolerance.CONSERVATIVE);
-    }
-
-    private void setAuthenticatedUser(String email) {
-        SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(email, "n/a", AuthorityUtils.createAuthorityList("ROLE_USER")));
     }
 
     private RiskProfileRequest buildRequest(int age, int horizon, int emergencyMonths, String reaction) {

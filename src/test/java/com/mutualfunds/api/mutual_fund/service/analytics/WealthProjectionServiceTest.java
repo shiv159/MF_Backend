@@ -1,8 +1,9 @@
-package com.mutualfunds.api.mutual_fund.service.analytics;
+package com.mutualfunds.api.mutual_fund.features.portfolio.analytics.application;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.mutualfunds.api.mutual_fund.entity.Fund;
+import com.mutualfunds.api.mutual_fund.features.funds.domain.Fund;
+import com.mutualfunds.api.mutual_fund.shared.util.FundMetadataExtractor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,7 +21,7 @@ class WealthProjectionServiceTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        wealthProjectionService = new WealthProjectionService(objectMapper);
+        wealthProjectionService = new WealthProjectionService(new FundMetadataExtractor());
     }
 
     @Test

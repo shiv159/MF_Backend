@@ -1,0 +1,87 @@
+package com.mutualfunds.api.mutual_fund.features.auth.application;
+
+import com.mutualfunds.api.mutual_fund.features.auth.dto.request.LoginRequest;
+import com.mutualfunds.api.mutual_fund.features.auth.dto.request.RegisterRequest;
+import com.mutualfunds.api.mutual_fund.features.auth.dto.response.AuthResponse;
+import com.mutualfunds.api.mutual_fund.features.users.domain.User;
+import com.mutualfunds.api.mutual_fund.features.users.domain.UserType;
+import com.mutualfunds.api.mutual_fund.shared.exception.BadRequestException;
+import com.mutualfunds.api.mutual_fund.features.users.api.UserAccountService;
+import com.mutualfunds.api.mutual_fund.shared.security.JWTUtil;
+import com.mutualfunds.api.mutual_fund.features.auth.api.IAuthService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class AuthService implements IAuthService {
+
+        private final UserAccountService userAccountService;
+        private final PasswordEncoder passwordEncoder;
+        private final JWTUtil jwtUtil;
+        private final AuthenticationManager authenticationManager;
+
+        public AuthResponse register(RegisterRequest request) {
+
+                // Check if email already exists
+                if (userAccountService.existsByEmail(request.getEmail())) {
+                        throw new BadRequestException("Email already registered");
+                }
+
+                // Create user
+                User user = User.builder()
+                                .email(request.getEmail())
+                                .passwordHash(passwordEncoder.encode(request.getPassword()))
+                                .fullName(request.getFullName())
+                                .phone(request.getPhone())
+                                .userType(UserType.new_investor) // Default to new investor
+                                .isActive(true)
+                                .build();
+
+                User savedUser = userAccountService.save(user);
+
+                // Generate token
+                String token = jwtUtil.generateToken(savedUser.getEmail(), savedUser.getUserId());
+
+                return AuthResponse.builder()
+                                .status("success")
+                                .accessToken(token)
+                                .userId(savedUser.getUserId())
+                                .email(savedUser.getEmail())
+                                .fullName(savedUser.getFullName())
+                                .userType(savedUser.getUserType() != null ? savedUser.getUserType().name() : null)
+                                .authProvider(savedUser.getAuthProvider() != null ? savedUser.getAuthProvider().name()
+                                                : "LOCAL")
+                                .createdAt(savedUser.getCreatedAt())
+                                .build();
+        }
+
+        public AuthResponse login(LoginRequest request) {
+                // Authenticate user
+                Authentication authentication = authenticationManager.authenticate(
+                                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword()));
+
+                // Get user details
+                User user = userAccountService.findByEmail(request.getEmail())
+                                .orElseThrow(() -> new BadRequestException("User not found"));
+
+                // Generate token
+                String token = jwtUtil.generateToken(user.getEmail(), user.getUserId());
+
+                return AuthResponse.builder()
+                                .status("success")
+                                .accessToken(token)
+                                .userId(user.getUserId())
+                                .email(user.getEmail())
+                                .fullName(user.getFullName())
+                                .userType(user.getUserType() != null ? user.getUserType().name() : null)
+                                .authProvider(user.getAuthProvider() != null ? user.getAuthProvider().name() : "LOCAL")
+                                .createdAt(user.getCreatedAt())
+                                .build();
+        }
+
+}
