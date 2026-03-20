@@ -25,7 +25,9 @@ public class FundUpsertServiceImpl implements FundUpsertService {
     @Override
     public FundUpsertResult upsertFromEnriched(Map<String, Object> holding, boolean requireNav) {
         String isin = extractString(holding, "isin");
-        String fundName = extractString(holding, "fundName");
+        String fundName = firstNonBlank(
+                extractString(holding, "fund_name"),
+                extractString(holding, "fundName"));
         String amcName = extractString(holding, "amc");
         String fundCategory = extractString(holding, "category");
         Double expenseRatio = extractDouble(holding, "expenseRatio");
@@ -62,7 +64,7 @@ public class FundUpsertServiceImpl implements FundUpsertService {
                 existingFund.setTopHoldingsJson(topHoldings);
             if (fundMetadata != null)
                 existingFund.setFundMetadataJson(fundMetadata);
-            if (existingFund.getFundName() == null || existingFund.getFundName().isBlank()) {
+            if (fundName != null && !fundName.equals(existingFund.getFundName())) {
                 existingFund.setFundName(fundName);
             }
             return new FundUpsertResult(fundRepository.save(existingFund), false);
@@ -88,7 +90,19 @@ public class FundUpsertServiceImpl implements FundUpsertService {
 
     private String extractString(Map<String, Object> map, String key) {
         Object value = map.get(key);
-        return value != null ? value.toString() : null;
+        if (value == null)
+            return null;
+        String stringValue = value.toString().trim();
+        return stringValue.isEmpty() ? null : stringValue;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private Double extractDouble(Map<String, Object> map, String key) {

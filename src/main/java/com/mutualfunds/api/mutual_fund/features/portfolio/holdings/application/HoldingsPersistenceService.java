@@ -55,7 +55,7 @@ public class HoldingsPersistenceService {
             try {
                 // Extract Fund Master Data from enriched record (ETL response)
                 String isin = extractString(holding, "isin");
-                String fundName = extractString(holding, "fundName");
+                String fundName = resolveFundName(holding);
                 Double currentNav = extractDouble(holding, "currentNav");
 
                 // Extract User Holdings Data
@@ -103,7 +103,25 @@ public class HoldingsPersistenceService {
     // Helper methods for type-safe extraction
     private String extractString(Map<String, Object> map, String key) {
         Object value = map.get(key);
-        return value != null ? value.toString() : null;
+        if (value == null)
+            return null;
+        String stringValue = value.toString().trim();
+        return stringValue.isEmpty() ? null : stringValue;
+    }
+
+    private String resolveFundName(Map<String, Object> map) {
+        return firstNonBlank(
+                extractString(map, "fund_name"),
+                extractString(map, "fundName"));
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private Double extractDouble(Map<String, Object> map, String key) {

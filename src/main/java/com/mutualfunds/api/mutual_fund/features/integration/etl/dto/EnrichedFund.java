@@ -26,6 +26,10 @@ public class EnrichedFund {
     @JsonAlias("fundName")
     private String fundName;
 
+    @JsonProperty("input_fund_name")
+    @JsonAlias("inputFundName")
+    private String inputFundName;
+
     @JsonProperty("units")
     @JsonAlias("units")
     private BigDecimal units; // User's units

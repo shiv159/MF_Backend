@@ -141,11 +141,15 @@ public class ManualSelectionService implements IManualSelectionService {
             Map<String, Map<String, Object>> enrichedByName = new java.util.HashMap<>();
             if (enrichedData != null) {
                 for (Map<String, Object> em : enrichedData) {
+                    Object inputName = em.get("input_fund_name");
+                    if (inputName == null) {
+                        inputName = em.get("inputFundName");
+                    }
                     Object fn = em.get("fund_name");
-                    if (fn == null)
-                        fn = em.get("fundName");
-                    if (fn != null) {
-                        enrichedByName.put(fn.toString().toLowerCase().trim(), em);
+                    Object camelFn = em.get("fundName");
+                    Object key = inputName != null ? inputName : (fn != null ? fn : camelFn);
+                    if (key != null) {
+                        enrichedByName.put(key.toString().toLowerCase().trim(), em);
                     }
                 }
             }

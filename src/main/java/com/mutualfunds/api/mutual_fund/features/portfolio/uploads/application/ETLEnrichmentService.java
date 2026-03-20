@@ -94,7 +94,8 @@ public class ETLEnrichmentService implements IETLEnrichmentService {
                 if (response.getEnrichedFunds() != null) {
                     for (EnrichedFund fund : response.getEnrichedFunds()) {
                         Map<String, Object> fundMap = new HashMap<>();
-                        fundMap.put("fundName", fund.getFundName());
+                        fundMap.put("fund_name", fund.getFundName());
+                        fundMap.put("input_fund_name", fund.getInputFundName());
                         fundMap.put("isin", fund.getIsin());
                         fundMap.put("amc", fund.getAmc());
                         fundMap.put("category", fund.getCategory());
