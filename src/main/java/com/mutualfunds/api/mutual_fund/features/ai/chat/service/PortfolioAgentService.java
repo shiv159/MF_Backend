@@ -31,6 +31,7 @@ import reactor.core.scheduler.Schedulers;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -51,7 +52,7 @@ public class PortfolioAgentService {
 
     private static final Pattern SPLIT_PATTERN = Pattern.compile("\\b(?:vs|versus|compare|and)\\b|,");
 
-    private final IntentRouterService intentRouterService;
+    private final LLMIntentRouterService llmIntentRouterService;
     private final ChatSynthesisService chatSynthesisService;
     private final PortfolioReadService portfolioReadService;
     private final FundQueryService fundQueryService;
@@ -81,7 +82,9 @@ public class PortfolioAgentService {
             throw new IllegalArgumentException("Message must not be blank");
         }
 
-        ChatIntent intent = intentRouterService.resolveIntent(message, request.getScreenContext());
+        LLMIntentRouterService.IntentResult intentResult = llmIntentRouterService.resolveIntent(message, request.getScreenContext());
+        ChatIntent intent = intentResult.intent();
+        Map<String, Object> entities = intentResult.entities();
         UUID conversationId = resolveConversationId(request.getConversationId());
         UUID assistantMessageId = UUID.randomUUID();
 
@@ -110,9 +113,9 @@ public class PortfolioAgentService {
 
         switch (intent) {
             case DATA_QUALITY -> handleDataQuality(conversationId, qualityResult, toolTrace, sources, emitter);
-            case FUND_COMPARE -> handleFundCompare(message, holdings, toolTrace, sources, warnings, emitter);
-            case FUND_RISK -> handleFundRisk(message, holdings, toolTrace, sources, warnings, emitter);
-            case FUND_PERFORMANCE -> handleFundPerformance(message, holdings, toolTrace, sources, warnings, emitter);
+            case FUND_COMPARE -> handleFundCompare(message, holdings, entities, toolTrace, sources, warnings, emitter);
+            case FUND_RISK -> handleFundRisk(message, holdings, entities, toolTrace, sources, warnings, emitter);
+            case FUND_PERFORMANCE -> handleFundPerformance(message, holdings, entities, toolTrace, sources, warnings, emitter);
             case RISK_PROFILE_EXPLAINER -> handleRiskProfile(conversationId, userId, toolTrace, sources,
                     warnings, emitter);
             case DIAGNOSTIC_EXPLAINER -> handleDiagnostic(conversationId, userId, toolTrace, sources,
@@ -123,6 +126,31 @@ public class PortfolioAgentService {
                     emitter);
             case REBALANCE_DRAFT -> handleRebalanceDraft(conversationId, userId, holdings, qualityResult,
                     toolTrace, sources, warnings, actions, emitter);
+            case WHAT_IF -> {
+                emit(emitter, toolStart(conversationId, "what_if"));
+                handleGeneralQuestion(conversationId, userId, toolTrace, sources, warnings, emitter);
+                emit(emitter, toolResult(conversationId, "what_if", toolTrace));
+            }
+            case GOAL_PLANNING -> {
+                emit(emitter, toolStart(conversationId, "goal_planning"));
+                handleGeneralQuestion(conversationId, userId, toolTrace, sources, warnings, emitter);
+                emit(emitter, toolResult(conversationId, "goal_planning", toolTrace));
+            }
+            case FUND_STORY -> {
+                emit(emitter, toolStart(conversationId, "fund_story"));
+                handleFundPerformance(message, holdings, entities, toolTrace, sources, warnings, emitter);
+                emit(emitter, toolResult(conversationId, "fund_story", toolTrace));
+            }
+            case STATEMENT_ANALYZE -> {
+                emit(emitter, toolStart(conversationId, "statement_analyze"));
+                handleGeneralQuestion(conversationId, userId, toolTrace, sources, warnings, emitter);
+                emit(emitter, toolResult(conversationId, "statement_analyze", toolTrace));
+            }
+            case PEER_COMPARE -> {
+                emit(emitter, toolStart(conversationId, "peer_compare"));
+                handleGeneralQuestion(conversationId, userId, toolTrace, sources, warnings, emitter);
+                emit(emitter, toolResult(conversationId, "peer_compare", toolTrace));
+            }
         }
 
         ChatSynthesisService.SynthesisResult synthesis = chatSynthesisService.synthesize(
@@ -157,31 +185,34 @@ public class PortfolioAgentService {
 
     private void handleFundCompare(String message,
             List<UserHolding> holdings,
+            Map<String, Object> entities,
             ObjectNode toolTrace,
             List<ChatSource> sources,
             List<String> warnings,
             Consumer<ChatStreamEvent> emitter) {
-        List<Fund> funds = resolveRelevantFunds(message, holdings, 2);
+        List<Fund> funds = resolveRelevantFunds(message, holdings, entities, 2);
         emitFundTool("fund_compare", funds, toolTrace, sources, warnings, emitter, true, true);
     }
 
     private void handleFundRisk(String message,
             List<UserHolding> holdings,
+            Map<String, Object> entities,
             ObjectNode toolTrace,
             List<ChatSource> sources,
             List<String> warnings,
             Consumer<ChatStreamEvent> emitter) {
-        List<Fund> funds = resolveRelevantFunds(message, holdings, 2);
+        List<Fund> funds = resolveRelevantFunds(message, holdings, entities, 2);
         emitFundTool("fund_risk", funds, toolTrace, sources, warnings, emitter, false, true);
     }
 
     private void handleFundPerformance(String message,
             List<UserHolding> holdings,
+            Map<String, Object> entities,
             ObjectNode toolTrace,
             List<ChatSource> sources,
             List<String> warnings,
             Consumer<ChatStreamEvent> emitter) {
-        List<Fund> funds = resolveRelevantFunds(message, holdings, 2);
+        List<Fund> funds = resolveRelevantFunds(message, holdings, entities, 2);
         emitFundTool("fund_performance", funds, toolTrace, sources, warnings, emitter, true, false);
     }
 
@@ -526,8 +557,30 @@ public class PortfolioAgentService {
         emit(emitter, toolResult(null, toolName, fundNodes));
     }
 
-    private List<Fund> resolveRelevantFunds(String message, List<UserHolding> holdings, int limit) {
+    private List<Fund> resolveRelevantFunds(String message, List<UserHolding> holdings, Map<String, Object> entities, int limit) {
         Map<UUID, Fund> matches = new LinkedHashMap<>();
+
+        @SuppressWarnings("unchecked")
+        List<String> entityFundNames = (List<String>) entities.getOrDefault("funds", Collections.emptyList());
+        if (!entityFundNames.isEmpty()) {
+            for (String entityFundName : entityFundNames) {
+                List<Fund> found = fundQueryService.findByFundNameContainingIgnoreCase(entityFundName);
+                for (Fund fund : found) {
+                    matches.putIfAbsent(fund.getFundId(), fund);
+                    if (matches.size() >= limit) {
+                        break;
+                    }
+                }
+                if (matches.size() >= limit) {
+                    break;
+                }
+            }
+        }
+
+        if (matches.size() >= limit) {
+            return new ArrayList<>(matches.values()).subList(0, Math.min(limit, matches.size()));
+        }
+
         String normalized = message == null ? "" : message.toLowerCase(Locale.ROOT);
 
         for (UserHolding holding : holdings) {

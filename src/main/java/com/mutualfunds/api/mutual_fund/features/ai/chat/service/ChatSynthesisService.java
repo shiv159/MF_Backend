@@ -9,6 +9,7 @@ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,29 +20,31 @@ import java.util.UUID;
 public class ChatSynthesisService {
 
     private static final String SYNTHESIS_PROMPT = """
-            You are a grounded mutual fund portfolio assistant.
-            Return ONLY valid JSON using this exact structure:
-            {"response":"short grounded answer"}
+            You are PlanMyFunds AI — a grounded, data-driven mutual fund portfolio assistant for Indian investors.
 
             Rules:
-            - Keep the response under 170 words.
-            - Use only the provided tool results and conversation context.
+            - Keep responses under 300 words, use markdown formatting.
+            - Use ONLY the provided tool results and conversation context. Never invent data.
             - If data is missing or stale, mention that briefly.
             - Be direct, useful, and non-promotional.
-            - Do not include markdown code fences.
+            - Use ₹ for currency, Indian number formatting (lakhs/crores).
+            - When comparing funds, use tables.
+            - When explaining risk, relate it to the user's profile.
+            - End with 1-2 actionable next steps when appropriate.
             """;
 
     private final ObjectMapper objectMapper;
-    private final ChatClient chatClient;
+    private final ChatClient synthesisChatClient;
+    private final ChatMemory chatMemory;
 
-    public ChatSynthesisService(ChatClient.Builder builder, ObjectMapper objectMapper) {
+    public ChatSynthesisService(@Qualifier("synthesisChatClient") ChatClient synthesisChatClient,
+                                 ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
-        this.chatClient = builder
-                .defaultAdvisors(MessageChatMemoryAdvisor.builder(MessageWindowChatMemory.builder()
-                        .chatMemoryRepository(new InMemoryChatMemoryRepository())
-                        .maxMessages(20)
-                        .build()).build())
+        this.chatMemory = MessageWindowChatMemory.builder()
+                .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                .maxMessages(20)
                 .build();
+        this.synthesisChatClient = synthesisChatClient;
     }
 
     public SynthesisResult synthesize(ChatIntent intent, String conversationId, String screenContext,
@@ -50,11 +53,11 @@ public class ChatSynthesisService {
             String effectiveConversationId = conversationId == null || conversationId.isBlank()
                     ? UUID.randomUUID().toString()
                     : conversationId;
-            String response = chatClient.prompt()
+            String response = synthesisChatClient.prompt()
                     .system(SYNTHESIS_PROMPT)
                     .user(buildPrompt(intent, screenContext, userMessage, toolPayload, warnings))
-                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID,
-                            effectiveConversationId))
+                    .advisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, effectiveConversationId))
                     .call()
                     .content();
 
@@ -62,13 +65,7 @@ public class ChatSynthesisService {
                 return new SynthesisResult(fallback(intent, toolPayload, warnings), true);
             }
 
-            String normalized = stripCodeFences(response);
-            JsonNode node = objectMapper.readTree(normalized);
-            String content = node.path("response").asText("").trim();
-            if (content.isBlank()) {
-                return new SynthesisResult(fallback(intent, toolPayload, warnings), true);
-            }
-            return new SynthesisResult(content, false);
+            return new SynthesisResult(response.trim(), false);
         } catch (Exception ex) {
             log.warn("Chat synthesis failed, using fallback: {}", ex.getMessage());
             return new SynthesisResult(fallback(intent, toolPayload, warnings), true);
@@ -101,12 +98,12 @@ public class ChatSynthesisService {
     }
 
     private String fallback(ChatIntent intent, JsonNode toolPayload, List<String> warnings) {
-        String note = warnings == null || warnings.isEmpty() ? "" : " Data note: " + warnings.get(0);
+        String note = warnings == null || warnings.isEmpty() ? "" : " Data note: " + warnings.getFirst();
         return switch (intent) {
             case PORTFOLIO_SUMMARY, GENERAL_QA -> {
                 JsonNode snapshot = toolPayload.path("portfolioSnapshot");
                 yield String.format(
-                        "I found %d funds with a current value of %.2f and a total gain/loss of %.2f.%s",
+                        "I found %d funds with a current value of ₹%.2f and a total gain/loss of ₹%.2f.%s",
                         snapshot.path("fundCount").asInt(),
                         snapshot.path("totalCurrentValue").asDouble(),
                         snapshot.path("totalGainLoss").asDouble(),
@@ -135,13 +132,11 @@ public class ChatSynthesisService {
             }
             case REBALANCE_DRAFT -> toolPayload.path("draftSummary")
                     .asText("I prepared a draft rebalance plan that is still read-only and needs your review.") + note;
+            case WHAT_IF -> "I've simulated the portfolio change you described." + note;
+            case GOAL_PLANNING -> "I've started building a goal plan based on your inputs." + note;
+            case FUND_STORY -> "Here's a deep dive into the fund you asked about." + note;
+            case STATEMENT_ANALYZE -> "I've analyzed the uploaded statement." + note;
+            case PEER_COMPARE -> "Here's how your portfolio compares to similar investors." + note;
         };
-    }
-
-    private String stripCodeFences(String content) {
-        if (!content.startsWith("```")) {
-            return content;
-        }
-        return content.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "");
     }
 }
