@@ -113,3 +113,82 @@ CREATE INDEX IF NOT EXISTS idx_funds_isin ON funds(isin);
 CREATE INDEX IF NOT EXISTS idx_funds_category ON funds(fund_category);
 CREATE INDEX IF NOT EXISTS idx_portfolio_alerts_user_status ON portfolio_alerts(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_portfolio_alerts_dedupe ON portfolio_alerts(user_id, dedupe_key);
+
+-- Chat Conversations table
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    conversation_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    title VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Chat Messages table
+CREATE TABLE IF NOT EXISTS chat_messages (
+    message_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversation_id UUID NOT NULL REFERENCES chat_conversations(conversation_id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
+    content TEXT NOT NULL,
+    intent VARCHAR(50),
+    tool_trace JSONB,
+    sources JSONB,
+    actions JSONB,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- User Goals table
+CREATE TABLE IF NOT EXISTS user_goals (
+    goal_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    goal_type VARCHAR(50) NOT NULL,
+    goal_name VARCHAR(255) NOT NULL,
+    target_amount DECIMAL(15,2),
+    target_date DATE,
+    current_amount DECIMAL(15,2) DEFAULT 0,
+    monthly_sip DECIMAL(15,2),
+    expected_return_pct DECIMAL(5,2),
+    asset_allocation_json JSONB,
+    linked_fund_ids JSONB,
+    status VARCHAR(20) DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'ACHIEVED', 'PAUSED', 'CANCELLED')),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Portfolio Briefings table
+CREATE TABLE IF NOT EXISTS portfolio_briefings (
+    briefing_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    briefing_type VARCHAR(20) NOT NULL CHECK (briefing_type IN ('DAILY', 'WEEKLY')),
+    title VARCHAR(255),
+    content TEXT NOT NULL,
+    metrics_json JSONB,
+    alerts_summary JSONB,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Peer Comparison Snapshots table
+CREATE TABLE IF NOT EXISTS peer_comparison_snapshots (
+    snapshot_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    risk_profile VARCHAR(20) NOT NULL,
+    age_bracket VARCHAR(20) NOT NULL,
+    portfolio_size_bracket VARCHAR(20) NOT NULL,
+    avg_equity_pct DECIMAL(5,2),
+    avg_debt_pct DECIMAL(5,2),
+    avg_gold_pct DECIMAL(5,2),
+    avg_expense_ratio DECIMAL(5,3),
+    avg_fund_count INTEGER,
+    avg_returns_1y DECIMAL(5,2),
+    avg_overlap_pct DECIMAL(5,2),
+    sample_size INTEGER,
+    computed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indices for new tables
+CREATE INDEX IF NOT EXISTS idx_chat_conversations_user ON chat_conversations(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON chat_messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_user_goals_user ON user_goals(user_id);
+CREATE INDEX IF NOT EXISTS idx_portfolio_briefings_user ON portfolio_briefings(user_id);
+CREATE INDEX IF NOT EXISTS idx_portfolio_briefings_unread ON portfolio_briefings(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_peer_snapshots_profile ON peer_comparison_snapshots(risk_profile, age_bracket, portfolio_size_bracket);
