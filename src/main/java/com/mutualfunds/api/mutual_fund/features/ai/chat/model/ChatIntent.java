@@ -2,6 +2,7 @@ package com.mutualfunds.api.mutual_fund.features.ai.chat.model;
 
 public enum ChatIntent {
     REBALANCE_DRAFT,
+    SCENARIO_ANALYSIS,
     DATA_QUALITY,
     FUND_COMPARE,
     FUND_RISK,

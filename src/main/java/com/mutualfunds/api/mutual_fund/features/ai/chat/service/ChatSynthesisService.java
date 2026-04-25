@@ -133,6 +133,7 @@ public class ChatSynthesisService {
                         quality.path("missingCount").asInt(),
                         note);
             }
+            case SCENARIO_ANALYSIS -> "I evaluated the scenario using your saved portfolio mix, risk profile, and fund analytics." + note;
             case REBALANCE_DRAFT -> toolPayload.path("draftSummary")
                     .asText("I prepared a draft rebalance plan that is still read-only and needs your review.") + note;
         };

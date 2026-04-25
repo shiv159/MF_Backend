@@ -1,7 +1,7 @@
 package com.mutualfunds.api.mutual_fund.features.ai.chat.service;
 
+import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.StarterPromptGroup;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.StarterPromptsResponse;
-import com.mutualfunds.api.mutual_fund.features.portfolio.api.PortfolioReadService;
 import com.mutualfunds.api.mutual_fund.features.portfolio.holdings.domain.UserHolding;
 import com.mutualfunds.api.mutual_fund.features.portfolio.quality.application.PortfolioDataQualityInspector;
 import lombok.RequiredArgsConstructor;
@@ -10,55 +10,80 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class StarterPromptService {
 
-    private final PortfolioReadService portfolioReadService;
-    private final PortfolioDataQualityInspector dataQualityInspector;
+    private final PortfolioToolFacade portfolioToolFacade;
 
-    public StarterPromptsResponse getStarterPrompts(UUID userId, String screenContext) {
-        List<UserHolding> holdings = portfolioReadService.findHoldingsWithFund(userId);
-        PortfolioDataQualityInspector.Result qualityResult = dataQualityInspector.inspect(holdings);
+    public StarterPromptsResponse getStarterPrompts(String screenContext) {
+        List<UserHolding> holdings = portfolioToolFacade.findCurrentHoldings();
+        PortfolioDataQualityInspector.Result qualityResult = portfolioToolFacade.inspectDataQuality(holdings);
 
+        List<StarterPromptGroup> groups = new ArrayList<>();
         List<String> prompts = new ArrayList<>();
         String context = screenContext == null ? "" : screenContext.toUpperCase(Locale.ROOT);
 
         if (holdings.isEmpty()) {
-            prompts.add("What data do I need before I can analyze my portfolio?");
-            prompts.add("How should I build a beginner mutual fund allocation?");
-            prompts.add("What should I look for before choosing my first fund?");
-            prompts.add("How do risk profile and time horizon change portfolio design?");
-            return StarterPromptsResponse.builder().prompts(prompts).build();
+            groups.add(group("explain", "Explain",
+                    "What data do I need before I can analyze my portfolio?",
+                    "How should I build a beginner mutual fund allocation?"));
+            groups.add(group("simulate", "Simulate",
+                    "How do risk profile and time horizon change portfolio design?",
+                    "What should I look for before choosing my first fund?"));
+            groups.forEach(group -> prompts.addAll(group.getPrompts()));
+            return StarterPromptsResponse.builder().prompts(prompts).groups(groups).build();
         }
 
         switch (context) {
             case "RISK_PROFILE_RESULT" -> {
-                prompts.add("Explain my risk level in simple terms");
-                prompts.add("Why does this allocation fit my horizon?");
-                prompts.add("What should I start with first?");
-                prompts.add("How can I reduce risk without losing too much growth?");
+                groups.add(group("explain", "Explain",
+                        "Explain my risk level in simple terms",
+                        "Why does this allocation fit my horizon?"));
+                groups.add(group("simulate", "Simulate",
+                        "How can I reduce risk without losing too much growth?",
+                        "What if I move 10% to debt?"));
             }
             case "MANUAL_SELECTION_RESULT" -> {
-                prompts.add("What is the biggest problem in this portfolio?");
-                prompts.add("Where do I have overlap or concentration risk?");
-                prompts.add("How can I improve this mix without adding too many funds?");
-                prompts.add("Draft a lower-risk rebalance plan for this portfolio");
+                groups.add(group("diagnose", "Diagnose",
+                        "What is the biggest problem in this portfolio?",
+                        "Where do I have overlap or concentration risk?"));
+                groups.add(group("simulate", "Simulate",
+                        "Draft a lower-risk rebalance plan for this portfolio",
+                        "My portfolio looks too aggressive"));
             }
             default -> {
-                prompts.add("Analyze my portfolio and tell me the top issue");
-                prompts.add("Compare two funds in my portfolio");
-                prompts.add("Which fund in my portfolio looks riskiest?");
-                prompts.add("Show me a draft rebalance to improve diversification");
+                groups.add(group("explain", "Explain",
+                        "Analyze my portfolio and tell me the top issue",
+                        "Why did you suggest this?"));
+                groups.add(group("compare", "Compare",
+                        "Compare these two funds for my profile",
+                        "Which fund in my portfolio looks riskiest?"));
+                groups.add(group("simulate", "Simulate",
+                        "What if I move 10% to debt?",
+                        "Show me a draft rebalance to improve diversification"));
+                groups.add(group("data-quality", "Data Quality",
+                        "What data in my portfolio is stale or incomplete?",
+                        "Which of my funds are missing enrichment data?"));
             }
         }
 
         if (qualityResult.staleCount() > 0 || qualityResult.missingCount() > 0) {
-            prompts.set(prompts.size() - 1, "What data in my portfolio is stale or incomplete?");
+            groups.add(group("data-quality", "Data Quality",
+                    "What data in my portfolio is stale or incomplete?",
+                    "How much does stale data limit these recommendations?"));
         }
 
-        return StarterPromptsResponse.builder().prompts(prompts).build();
+        groups.forEach(group -> prompts.addAll(group.getPrompts()));
+        return StarterPromptsResponse.builder().prompts(prompts).groups(groups).build();
+    }
+
+    private StarterPromptGroup group(String key, String title, String... prompts) {
+        return StarterPromptGroup.builder()
+                .key(key)
+                .title(title)
+                .prompts(List.of(prompts))
+                .build();
     }
 }

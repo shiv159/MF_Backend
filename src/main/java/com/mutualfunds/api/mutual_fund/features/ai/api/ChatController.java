@@ -46,7 +46,8 @@ public class ChatController {
     @GetMapping("/starter-prompts")
     public StarterPromptsResponse getStarterPrompts(@RequestParam(required = false) String screenContext,
             Authentication authentication) {
-        return starterPromptService.getStarterPrompts(extractUserId(authentication), screenContext);
+        extractUserId(authentication);
+        return starterPromptService.getStarterPrompts(screenContext);
     }
 
     private UUID extractUserId(Authentication authentication) {

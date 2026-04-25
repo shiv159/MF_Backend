@@ -35,4 +35,13 @@ class IntentRouterServiceTest {
 
         assertThat(intent).isEqualTo(ChatIntent.DATA_QUALITY);
     }
+
+    @Test
+    void detectsScenarioQuestions() {
+        ChatIntent intent = intentRouterService.resolveIntent(
+                "What if I move 10% to debt?",
+                "LANDING");
+
+        assertThat(intent).isEqualTo(ChatIntent.SCENARIO_ANALYSIS);
+    }
 }
