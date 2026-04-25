@@ -12,9 +12,9 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class StarterPromptsResponse {
+public class StarterPromptGroup {
+    private String key;
+    private String title;
     @Builder.Default
     private List<String> prompts = new ArrayList<>();
-    @Builder.Default
-    private List<StarterPromptGroup> groups = new ArrayList<>();
 }
