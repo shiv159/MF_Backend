@@ -1,29 +1,43 @@
 package com.mutualfunds.api.mutual_fund.features.portfolio.manual.application;
 
-import com.mutualfunds.api.mutual_fund.features.portfolio.uploads.dto.EnrichmentResult;
-import com.mutualfunds.api.mutual_fund.features.portfolio.manual.dto.*;
-import com.mutualfunds.api.mutual_fund.features.portfolio.uploads.dto.request.ParsedHoldingEntry;
-import com.mutualfunds.api.mutual_fund.features.funds.domain.Fund;
-import com.mutualfunds.api.mutual_fund.features.users.domain.User;
-import com.mutualfunds.api.mutual_fund.features.portfolio.holdings.domain.UserHolding;
-import com.mutualfunds.api.mutual_fund.shared.exception.BadRequestException;
-import com.mutualfunds.api.mutual_fund.shared.exception.ServiceUnavailableException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.mutualfunds.api.mutual_fund.features.funds.api.FundQueryService;
 import com.mutualfunds.api.mutual_fund.features.funds.api.FundUpsertService;
+import com.mutualfunds.api.mutual_fund.features.funds.domain.Fund;
+import com.mutualfunds.api.mutual_fund.features.portfolio.analytics.application.PortfolioAnalyzerService;
+import com.mutualfunds.api.mutual_fund.features.portfolio.analytics.application.WealthProjectionService;
+import com.mutualfunds.api.mutual_fund.features.portfolio.holdings.domain.UserHolding;
 import com.mutualfunds.api.mutual_fund.features.portfolio.holdings.persistence.UserHoldingRepository;
-import com.mutualfunds.api.mutual_fund.features.portfolio.uploads.application.ETLEnrichmentService;
-import com.mutualfunds.api.mutual_fund.features.portfolio.uploads.api.IOnboardingService;
 import com.mutualfunds.api.mutual_fund.features.portfolio.manual.api.IManualSelectionService;
+import com.mutualfunds.api.mutual_fund.features.portfolio.manual.dto.ManualSelectionHolding;
+import com.mutualfunds.api.mutual_fund.features.portfolio.manual.dto.ManualSelectionItemRequest;
+import com.mutualfunds.api.mutual_fund.features.portfolio.manual.dto.ManualSelectionPortfolio;
+import com.mutualfunds.api.mutual_fund.features.portfolio.manual.dto.ManualSelectionPortfolioSummary;
+import com.mutualfunds.api.mutual_fund.features.portfolio.manual.dto.ManualSelectionRequest;
+import com.mutualfunds.api.mutual_fund.features.portfolio.manual.dto.ManualSelectionResponse;
+import com.mutualfunds.api.mutual_fund.features.portfolio.manual.dto.ManualSelectionResult;
+import com.mutualfunds.api.mutual_fund.features.portfolio.uploads.api.IOnboardingService;
+import com.mutualfunds.api.mutual_fund.features.portfolio.uploads.application.ETLEnrichmentService;
+import com.mutualfunds.api.mutual_fund.features.portfolio.uploads.dto.EnrichmentResult;
+import com.mutualfunds.api.mutual_fund.features.portfolio.uploads.dto.request.ParsedHoldingEntry;
+import com.mutualfunds.api.mutual_fund.features.users.domain.User;
+import com.mutualfunds.api.mutual_fund.shared.exception.BadRequestException;
+import com.mutualfunds.api.mutual_fund.shared.exception.ServiceUnavailableException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
-import com.mutualfunds.api.mutual_fund.features.portfolio.analytics.application.PortfolioAnalyzerService;
-import com.mutualfunds.api.mutual_fund.features.portfolio.analytics.application.WealthProjectionService;
 
 @Service
 @RequiredArgsConstructor
@@ -33,13 +47,14 @@ public class ManualSelectionService implements IManualSelectionService {
     private static final String STATUS_RESOLVED_FROM_DB = "RESOLVED_FROM_DB";
     private static final String STATUS_CREATED_FROM_ETL = "CREATED_FROM_ETL";
     private static final String STATUS_ENRICHED_FROM_ETL = "ENRICHED_FROM_ETL";
+    private static final String STATUS_ENRICHMENT_FAILED = "ENRICHMENT_FAILED";
+    private static final int DB_FRESHNESS_DAYS = 7;
 
     private final IOnboardingService onboardingService;
     private final FundQueryService fundQueryService;
     private final FundUpsertService fundUpsertService;
     private final UserHoldingRepository userHoldingRepository;
     private final ETLEnrichmentService etlEnrichmentService;
-
     private final PortfolioAnalyzerService portfolioAnalyzerService;
     private final WealthProjectionService wealthProjectionService;
 
@@ -52,7 +67,6 @@ public class ManualSelectionService implements IManualSelectionService {
         List<ManualSelectionItemRequest> selections = request.getSelections();
         validateWeights(selections);
 
-        // 1) Resolve DB selections immediately
         List<ManualSelectionResult> results = new ArrayList<>();
         Map<Integer, Fund> resolvedFundsByIndex = new HashMap<>();
         Map<Integer, Integer> weightPctByIndex = new HashMap<>();
@@ -64,37 +78,11 @@ public class ManualSelectionService implements IManualSelectionService {
             ManualSelectionItemRequest item = selections.get(i);
             weightPctByIndex.put(i, item.getWeightPct());
 
-            // Check if fundId (ISIN) or fundName exists in database
-            Fund existingFund = null;
-            String inputIsin = null;
-            String inputFundName = null;
+            ResolvedSelection resolvedSelection = resolveSelection(item);
+            Fund existingFund = resolvedSelection.fund();
+            ReuseDecision reuseDecision = evaluateReuse(existingFund);
 
-            if (item.getFundId() != null) {
-                // fundId is actually ISIN value
-                inputIsin = item.getFundId();
-                existingFund = fundQueryService.findByIsin(inputIsin).orElse(null);
-            } else if (item.getFundName() != null) {
-                inputFundName = item.getFundName().trim();
-                final String finalInputFundName = inputFundName;
-                // Try to find by exact fund name match
-                List<Fund> matchingFunds = fundQueryService.findByFundNameContainingIgnoreCase(inputFundName);
-                if (!matchingFunds.isEmpty()) {
-                    // Use the first exact match or closest match
-                    existingFund = matchingFunds.stream()
-                            .filter(f -> f.getFundName().equalsIgnoreCase(finalInputFundName))
-                            .findFirst()
-                            .orElse(matchingFunds.get(0));
-                }
-            }
-
-            // Check if existing fund data is fresh (within a week)
-            boolean isFreshData = existingFund != null &&
-                    existingFund.getLastUpdated() != null &&
-                    existingFund.getLastUpdated().isAfter(LocalDateTime.now().minusWeeks(1)) &&
-                    existingFund.getCurrentNav() != null; // Require valid NAV — don't serve incomplete cached records
-
-            if (isFreshData) {
-                // Use existing fund from database
+            if (reuseDecision.reusable()) {
                 resolvedFundsByIndex.put(i, existingFund);
                 results.add(ManualSelectionResult.builder()
                         .inputFundId(item.getFundId())
@@ -105,26 +93,40 @@ public class ManualSelectionService implements IManualSelectionService {
                         .isin(existingFund.getIsin())
                         .message("Resolved from database (data is fresh)")
                         .build());
-            } else {
-                // Call ETL to get fresh data
-                etlIndexes.add(i);
-                String fundNameForEtl = inputFundName != null ? inputFundName
-                        : (existingFund != null ? existingFund.getFundName() : "Unknown");
-                etlRequests.add(ParsedHoldingEntry.builder()
-                        .fundName(fundNameForEtl)
-                        .units(1.0)
-                        .build());
+                continue;
+            }
+
+            String fallbackReason = reuseDecision.reason();
+            String fundNameForEtl = firstNonBlank(
+                    resolvedSelection.inputFundName(),
+                    existingFund != null ? existingFund.getFundName() : null);
+
+            if (fundNameForEtl == null) {
+                log.warn("Unable to route selection index {} to ETL because no fund name is available. Reason={}", i,
+                        fallbackReason);
                 results.add(ManualSelectionResult.builder()
                         .inputFundId(item.getFundId())
                         .inputFundName(item.getFundName())
-                        .status(STATUS_ENRICHED_FROM_ETL)
-                        .message(existingFund != null ? "Refreshing from ETL (data is stale)"
-                                : "Fetching from ETL (new fund)")
+                        .status(STATUS_ENRICHMENT_FAILED)
+                        .message("Unable to resolve this fund: " + formatFallbackReason(fallbackReason))
                         .build());
+                continue;
             }
+
+            log.info("Routing selection index {} for '{}' to ETL. Reason={}", i, fundNameForEtl, fallbackReason);
+            etlIndexes.add(i);
+            etlRequests.add(ParsedHoldingEntry.builder()
+                    .fundName(fundNameForEtl)
+                    .units(1.0)
+                    .build());
+            results.add(ManualSelectionResult.builder()
+                    .inputFundId(item.getFundId())
+                    .inputFundName(item.getFundName())
+                    .status(STATUS_ENRICHED_FROM_ETL)
+                    .message(buildFallbackMessage(existingFund, fallbackReason))
+                    .build());
         }
 
-        // 2) Enrich missing funds via ETL in a single batch call
         if (!etlRequests.isEmpty()) {
             EnrichmentResult enrichmentResult;
             try {
@@ -135,21 +137,18 @@ public class ManualSelectionService implements IManualSelectionService {
 
             List<Map<String, Object>> enrichedData = enrichmentResult.getEnrichedData();
 
-            // Build a name-based map so we can match enriched results back to each
-            // requested fund individually, without requiring a 1:1 positional alignment.
-            // This handles partial ETL results (status="partial") gracefully.
-            Map<String, Map<String, Object>> enrichedByName = new java.util.HashMap<>();
+            Map<String, Map<String, Object>> enrichedByName = new HashMap<>();
             if (enrichedData != null) {
-                for (Map<String, Object> em : enrichedData) {
-                    Object inputName = em.get("input_fund_name");
+                for (Map<String, Object> enrichedMap : enrichedData) {
+                    Object inputName = enrichedMap.get("input_fund_name");
                     if (inputName == null) {
-                        inputName = em.get("inputFundName");
+                        inputName = enrichedMap.get("inputFundName");
                     }
-                    Object fn = em.get("fund_name");
-                    Object camelFn = em.get("fundName");
-                    Object key = inputName != null ? inputName : (fn != null ? fn : camelFn);
+                    Object fundName = enrichedMap.get("fund_name");
+                    Object camelFundName = enrichedMap.get("fundName");
+                    Object key = inputName != null ? inputName : (fundName != null ? fundName : camelFundName);
                     if (key != null) {
-                        enrichedByName.put(key.toString().toLowerCase().trim(), em);
+                        enrichedByName.put(key.toString().toLowerCase().trim(), enrichedMap);
                     }
                 }
             }
@@ -160,30 +159,35 @@ public class ManualSelectionService implements IManualSelectionService {
                 Map<String, Object> enrichedMap = enrichedByName.get(requestedName);
 
                 if (enrichedMap == null) {
-                    // This specific fund failed enrichment — mark it and continue with others
                     log.warn("ETL could not enrich fund '{}' (index {}). Marking as failed.",
                             etlRequests.get(j).getFundName(), selectionIndex);
                     ManualSelectionResult failedResult = results.get(selectionIndex);
-                    failedResult.setStatus("ENRICHMENT_FAILED");
+                    failedResult.setStatus(STATUS_ENRICHMENT_FAILED);
                     failedResult.setMessage(
-                            "ETL could not resolve this fund. It has been excluded and the remaining " +
-                                    "funds' weights have been re-normalised to 100%.");
+                            "ETL could not resolve this fund. It has been excluded and the remaining funds' weights have been re-normalised to 100%.");
                     continue;
                 }
 
-                FundUpsertService.FundUpsertResult upsertOutcome = fundUpsertService.upsertFromEnriched(enrichedMap, true);
-                resolvedFundsByIndex.put(selectionIndex, upsertOutcome.fund());
-
-                ManualSelectionResult existing = results.get(selectionIndex);
-                existing.setFundId(upsertOutcome.fund().getFundId());
-                existing.setFundName(upsertOutcome.fund().getFundName());
-                existing.setIsin(upsertOutcome.fund().getIsin());
-                existing.setStatus(upsertOutcome.created() ? STATUS_CREATED_FROM_ETL : STATUS_ENRICHED_FROM_ETL);
+                ManualSelectionResult result = results.get(selectionIndex);
+                try {
+                    FundUpsertService.FundUpsertResult upsertOutcome = fundUpsertService.upsertFromEnriched(enrichedMap,
+                            true);
+                    resolvedFundsByIndex.put(selectionIndex, upsertOutcome.fund());
+                    result.setFundId(upsertOutcome.fund().getFundId());
+                    result.setFundName(upsertOutcome.fund().getFundName());
+                    result.setIsin(upsertOutcome.fund().getIsin());
+                    result.setStatus(upsertOutcome.created() ? STATUS_CREATED_FROM_ETL : STATUS_ENRICHED_FROM_ETL);
+                } catch (ServiceUnavailableException e) {
+                    log.warn("ETL returned incomplete data for selection index {} and fund '{}': {}",
+                            selectionIndex, etlRequests.get(j).getFundName(), e.getMessage());
+                    result.setStatus(STATUS_ENRICHMENT_FAILED);
+                    result.setMessage(
+                            "ETL returned incomplete data for this fund. It has been excluded and the remaining funds' weights have been re-normalised to 100%.");
+                }
             }
         }
 
-        // 3) Collect failed indexes and validate no duplicates among resolved funds
-        Set<Integer> failedIndexes = new java.util.HashSet<>();
+        Set<Integer> failedIndexes = new HashSet<>();
         for (int i = 0; i < selections.size(); i++) {
             if (resolvedFundsByIndex.get(i) == null) {
                 failedIndexes.add(i);
@@ -191,12 +195,7 @@ public class ManualSelectionService implements IManualSelectionService {
         }
         validateNoDuplicateFunds(resolvedFundsByIndex, selections.size(), failedIndexes);
 
-        // 4) Replace holdings + allocations atomically
         userHoldingRepository.deleteByUser_UserId(userId);
-
-        // Ensure deletes are executed before the following batch insert.
-        // Without this, Hibernate may order INSERTs before DELETEs within the same
-        // transaction, causing (user_id, fund_id) unique constraint violations.
         userHoldingRepository.flush();
 
         List<UserHolding> newHoldings = new ArrayList<>(selections.size());
@@ -204,8 +203,7 @@ public class ManualSelectionService implements IManualSelectionService {
         for (int i = 0; i < selections.size(); i++) {
             Fund fund = resolvedFundsByIndex.get(i);
             if (fund == null) {
-                // Fund failed ETL enrichment — already flagged in results, skip it
-                log.warn("Skipping holding at index {} — fund could not be resolved.", i);
+                log.warn("Skipping holding at index {} because fund could not be resolved.", i);
                 continue;
             }
             Integer weightPct = weightPctByIndex.get(i);
@@ -219,8 +217,6 @@ public class ManualSelectionService implements IManualSelectionService {
 
         userHoldingRepository.saveAll(newHoldings);
 
-        // 5) Re-normalise weights if any funds were skipped due to enrichment failure.
-        // Without this, the saved weights sum to less than 100%, which skews analytics.
         if (!failedIndexes.isEmpty() && !newHoldings.isEmpty()) {
             int resolvedTotalWeight = newHoldings.stream()
                     .mapToInt(h -> h.getWeightPct() != null ? h.getWeightPct() : 0)
@@ -230,24 +226,21 @@ public class ManualSelectionService implements IManualSelectionService {
                         resolvedTotalWeight, failedIndexes.size());
                 int runningTotal = 0;
                 for (int k = 0; k < newHoldings.size(); k++) {
-                    UserHolding h = newHoldings.get(k);
+                    UserHolding holding = newHoldings.get(k);
                     if (k == newHoldings.size() - 1) {
-                        // Assign remainder to the last fund to avoid rounding drift
-                        h.setWeightPct(100 - runningTotal);
+                        holding.setWeightPct(100 - runningTotal);
                     } else {
-                        int normalised = (int) Math.round(h.getWeightPct() * 100.0 / resolvedTotalWeight);
-                        h.setWeightPct(normalised);
+                        int normalised = (int) Math.round(holding.getWeightPct() * 100.0 / resolvedTotalWeight);
+                        holding.setWeightPct(normalised);
                         runningTotal += normalised;
                     }
                 }
-                // Persist the updated weights
                 userHoldingRepository.saveAll(newHoldings);
             }
         }
 
         ManualSelectionPortfolio portfolio = buildPortfolioResponse(newHoldings);
 
-        // 5) Perform Portfolio Analysis
         List<Fund> analyzedFunds = newHoldings.stream().map(UserHolding::getFund).collect(Collectors.toList());
         Map<UUID, Double> weights = newHoldings.stream()
                 .collect(Collectors.toMap(
@@ -255,11 +248,6 @@ public class ManualSelectionService implements IManualSelectionService {
                         h -> h.getWeightPct() / 100.0));
 
         var analysis = portfolioAnalyzerService.analyzePortfolio(analyzedFunds, weights);
-
-        // Wealth Projection (Existing Portfolio)
-        // Assume default ₹1 Lakh relative illustration for now, or user-specific if
-        // available.
-        // The DTO returns relative growth, so the start amount is a scaler.
         var projection = wealthProjectionService.calculateProjection(analyzedFunds, weights, 100000.0, 10);
         analysis.setWealthProjection(projection);
 
@@ -281,15 +269,90 @@ public class ManualSelectionService implements IManualSelectionService {
         }
     }
 
+    private ResolvedSelection resolveSelection(ManualSelectionItemRequest item) {
+        String inputFundId = normalise(item.getFundId());
+        String inputFundName = normalise(item.getFundName());
+        Fund existingFund = null;
+
+        if (inputFundId != null) {
+            try {
+                existingFund = fundQueryService.findById(UUID.fromString(inputFundId)).orElse(null);
+            } catch (IllegalArgumentException ignored) {
+                existingFund = fundQueryService.findByIsin(inputFundId).orElse(null);
+            }
+        }
+
+        if (existingFund == null && inputFundName != null) {
+            final String exactName = inputFundName;
+            List<Fund> matchingFunds = fundQueryService.findByFundNameContainingIgnoreCase(inputFundName);
+            if (!matchingFunds.isEmpty()) {
+                existingFund = matchingFunds.stream()
+                        .filter(fund -> fund.getFundName().equalsIgnoreCase(exactName))
+                        .findFirst()
+                        .orElse(matchingFunds.get(0));
+            }
+        }
+
+        return new ResolvedSelection(existingFund, inputFundId, inputFundName);
+    }
+
+    private ReuseDecision evaluateReuse(Fund fund) {
+        if (fund == null) {
+            return new ReuseDecision(false, "unresolved_identifier");
+        }
+        if (fund.getLastUpdated() == null || fund.getLastUpdated().isBefore(LocalDateTime.now().minusDays(DB_FRESHNESS_DAYS))) {
+            return new ReuseDecision(false, "stale_last_updated");
+        }
+        if (fund.getCurrentNav() == null) {
+            return new ReuseDecision(false, "missing_nav");
+        }
+        if (isMissing(fund.getSectorAllocationJson())) {
+            return new ReuseDecision(false, "missing_sector_allocation");
+        }
+        if (isMissing(fund.getTopHoldingsJson())) {
+            return new ReuseDecision(false, "missing_top_holdings");
+        }
+        if (isMissing(fund.getFundMetadataJson())) {
+            return new ReuseDecision(false, "missing_fund_metadata");
+        }
+        if (hasMetadataQualityIssues(fund.getFundMetadataJson())) {
+            return new ReuseDecision(false, "missing_fund_metadata");
+        }
+        return new ReuseDecision(true, "reusable");
+    }
+
+    private boolean isMissing(JsonNode node) {
+        return node == null || node.isNull() || node.isEmpty();
+    }
+
+    private boolean hasMetadataQualityIssues(JsonNode fundMetadata) {
+        JsonNode qualityNode = fundMetadata.path("data_quality");
+        if (qualityNode.isMissingNode() || qualityNode.isNull() || qualityNode.isEmpty()) {
+            qualityNode = fundMetadata.path("mstarpy_metadata").path("data_quality");
+        }
+
+        return hasTextValues(qualityNode.path("missing_fields")) || hasTextValues(qualityNode.path("quality_flags"));
+    }
+
+    private boolean hasTextValues(JsonNode node) {
+        if (!node.isArray() || node.isEmpty()) {
+            return false;
+        }
+        for (JsonNode value : node) {
+            if (value.isTextual() && !value.asText().isBlank()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void validateNoDuplicateFunds(Map<Integer, Fund> resolvedFundsByIndex, int totalCount,
             Set<Integer> failedIndexes) {
-        // Only resolved (non-failed) funds count toward the expected size
         int expectedResolved = totalCount - failedIndexes.size();
         if (resolvedFundsByIndex.size() != expectedResolved) {
             throw new BadRequestException("Some funds could not be resolved after ETL enrichment");
         }
 
-        // Duplicate check only applies to funds that were resolved
         Set<UUID> uniqueFundIds = resolvedFundsByIndex.values().stream()
                 .map(Fund::getFundId)
                 .collect(Collectors.toSet());
@@ -299,23 +362,59 @@ public class ManualSelectionService implements IManualSelectionService {
         }
     }
 
+    private String buildFallbackMessage(Fund existingFund, String reason) {
+        if (existingFund == null) {
+            return "Fetching from ETL (" + formatFallbackReason(reason) + ")";
+        }
+        return "Refreshing from ETL (" + formatFallbackReason(reason) + ")";
+    }
+
+    private String formatFallbackReason(String reason) {
+        return switch (reason) {
+            case "stale_last_updated" -> "data is stale";
+            case "missing_nav" -> "cached data is missing NAV";
+            case "missing_sector_allocation" -> "cached data is missing sector allocation";
+            case "missing_top_holdings" -> "cached data is missing top holdings";
+            case "missing_fund_metadata" -> "cached data is missing fund metadata";
+            case "unresolved_identifier" -> "identifier could not be resolved in database";
+            default -> "cached data is incomplete";
+        };
+    }
+
+    private String normalise(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     private ManualSelectionPortfolio buildPortfolioResponse(List<UserHolding> userHoldings) {
         List<ManualSelectionHolding> holdings = userHoldings.stream()
-                .map(uh -> {
-                    Fund f = uh.getFund();
+                .map(userHolding -> {
+                    Fund fund = userHolding.getFund();
                     return ManualSelectionHolding.builder()
-                            .fundId(f.getFundId())
-                            .fundName(f.getFundName())
-                            .isin(f.getIsin())
-                            .amcName(f.getAmcName())
-                            .fundCategory(f.getFundCategory())
-                            .directPlan(f.getDirectPlan())
-                            .currentNav(f.getCurrentNav())
-                            .navAsOf(f.getNavAsOf())
-                            .weightPct(uh.getWeightPct())
-                            .sectorAllocation(f.getSectorAllocationJson())
-                            .topHoldings(f.getTopHoldingsJson())
-                            .fundMetadata(f.getFundMetadataJson())
+                            .fundId(fund.getFundId())
+                            .fundName(fund.getFundName())
+                            .isin(fund.getIsin())
+                            .amcName(fund.getAmcName())
+                            .fundCategory(fund.getFundCategory())
+                            .directPlan(fund.getDirectPlan())
+                            .currentNav(fund.getCurrentNav())
+                            .navAsOf(fund.getNavAsOf())
+                            .weightPct(userHolding.getWeightPct())
+                            .sectorAllocation(fund.getSectorAllocationJson())
+                            .topHoldings(fund.getTopHoldingsJson())
+                            .fundMetadata(fund.getFundMetadataJson())
                             .build();
                 })
                 .collect(Collectors.toList());
@@ -334,7 +433,10 @@ public class ManualSelectionService implements IManualSelectionService {
                 .holdings(holdings)
                 .build();
     }
+
+    private record ResolvedSelection(Fund fund, String inputFundId, String inputFundName) {
+    }
+
+    private record ReuseDecision(boolean reusable, String reason) {
+    }
 }
-
-
-
