@@ -36,7 +36,7 @@ public class AiWorkflowProperties {
                 List.of("z-ai/glm-4.5-air:free", "nvidia/nemotron-3-super-120b-a12b:free"));
         private String baseUrl = "https://openrouter.ai/api/v1";
         private double temperature = 0.2;
-        private boolean logRequests = true;
-        private boolean logResponses = true;
+        private boolean logRequests = false;
+        private boolean logResponses = false;
     }
 }
