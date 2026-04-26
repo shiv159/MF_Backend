@@ -54,7 +54,7 @@ public class SecurityConfig {
                 .exceptionHandling(e -> e
                         .defaultAuthenticationEntryPointFor(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                                 new AntPathRequestMatcher("/api/**")))
-                .addFilterBefore(apiRateLimitingFilter, JWTAuthenticationFilter.class)
+                .addFilterBefore(apiRateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
