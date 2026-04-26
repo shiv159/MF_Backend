@@ -60,7 +60,7 @@ public class PortfolioToolFacade {
     private final AiWorkflowProperties properties;
 
     public UUID currentUserId() {
-        return currentUserProvider.getCurrentUserId();
+        return ToolExecutionContextHolder.userId().orElseGet(currentUserProvider::getCurrentUserId);
     }
 
     public List<UserHolding> findCurrentHoldings() {
@@ -242,8 +242,6 @@ public class PortfolioToolFacade {
             Optional<RiskProfileResponse> riskProfile,
             PortfolioDiagnosticDTO diagnostic) {
         ArrayNode holdingsSummary = objectMapper.createArrayNode();
-        ArrayNode fundAnalytics = objectMapper.createArrayNode();
-        ArrayNode marketContext = objectMapper.createArrayNode();
         List<String> warnings = new ArrayList<>(qualityResult.warnings());
 
         holdings.stream()
@@ -259,58 +257,8 @@ public class PortfolioToolFacade {
                             .put("category", fund.getFundCategory() == null ? "UNKNOWN" : fund.getFundCategory())
                             .put("weightPct", holding.getWeightPct() == null ? 0 : holding.getWeightPct())
                             .put("currentValue", holding.getCurrentValue() == null ? 0.0 : holding.getCurrentValue()));
-
-                    RollingReturnsDTO rollingReturns = calculateRollingReturns(fund.getFundId());
-                    RiskInsightsDTO riskInsights = calculateRiskInsights(fund.getFundId());
-                    ObjectNode analyticsNode = objectMapper.createObjectNode()
-                            .put("fundId", fund.getFundId().toString())
-                            .put("fundName", fund.getFundName())
-                            .put("category", fund.getFundCategory() == null ? "UNKNOWN" : fund.getFundCategory());
-                    if (rollingReturns != null) {
-                        analyticsNode.set("rollingReturns", objectMapper.valueToTree(rollingReturns));
-                    }
-                    if (riskInsights != null) {
-                        analyticsNode.set("riskInsights", objectMapper.valueToTree(riskInsights));
-                    }
-                    fundAnalytics.add(analyticsNode);
-
-                    ObjectNode marketNode = objectMapper.createObjectNode()
-                            .put("fundId", fund.getFundId().toString())
-                            .put("fundName", fund.getFundName())
-                            .put("category", fund.getFundCategory() == null ? "UNKNOWN" : fund.getFundCategory())
-                            .put("navAsOf", fund.getNavAsOf() == null ? "" : fund.getNavAsOf().toLocalDate().toString())
-                            .put("metadataUpdatedAt", fund.getLastUpdated() == null ? "" : fund.getLastUpdated().toString())
-                            .put("freshnessStatus", freshnessStatus(fund));
-                    JsonNode metadata = fund.getFundMetadataJson();
-                    if (metadata != null && !metadata.isNull()) {
-                        JsonNode riskVolatility = metadata.path("risk_volatility");
-                        marketNode.put("benchmarkName",
-                                riskVolatility.path("index_name").asText(riskVolatility.path("calculation_benchmark").asText("UNKNOWN")));
-                        marketNode.put("categoryName",
-                                riskVolatility.path("category_name").asText(fund.getFundCategory()));
-                        marketNode.put("fundStdDev3Y",
-                                riskVolatility.path("fund_risk_volatility").path("for3Year").path("standardDeviation").asDouble(0.0));
-                        marketNode.put("benchmarkStdDev3Y",
-                                riskVolatility.path("index_risk_volatility").path("for3Year").path("standardDeviation").asDouble(0.0));
-                        marketNode.put("categoryStdDev3Y",
-                                riskVolatility.path("category_risk_volatility").path("for3Year").path("standardDeviation").asDouble(0.0));
-                        marketNode.put("benchmarkSharpe3Y",
-                                riskVolatility.path("index_risk_volatility").path("for3Year").path("sharpeRatio").asDouble(0.0));
-                        marketNode.put("categorySharpe3Y",
-                                riskVolatility.path("category_risk_volatility").path("for3Year").path("sharpeRatio").asDouble(0.0));
-                        marketNode.put("navTrendDirection", deriveNavTrend(metadata));
-                    } else {
-                        marketNode.put("benchmarkName", "UNKNOWN");
-                        marketNode.put("categoryName", fund.getFundCategory() == null ? "UNKNOWN" : fund.getFundCategory());
-                        warnings.add(fund.getFundName() + " is missing fund metadata, so market context is limited.");
-                    }
-                    if ("STALE".equals(marketNode.path("freshnessStatus").asText())) {
-                        warnings.add(fund.getFundName() + " has stale market context data.");
-                    }
-                    marketContext.add(marketNode);
                 });
 
-        PortfolioCovarianceDTO covariance = calculatePortfolioCovariance(holdings);
         ObjectNode conversationContext = objectMapper.createObjectNode()
                 .put("screenContext", screenContext == null ? "LANDING" : screenContext)
                 .put("userMessage", userMessage == null ? "" : userMessage);
@@ -330,9 +278,9 @@ public class PortfolioToolFacade {
                         .map(value -> (JsonNode) objectMapper.valueToTree(value))
                         .orElseGet(objectMapper::createObjectNode))
                 .dataQuality(objectMapper.valueToTree(qualityResult))
-                .fundAnalytics(fundAnalytics)
-                .covariance(covariance == null ? objectMapper.createObjectNode() : objectMapper.valueToTree(covariance))
-                .marketContext(marketContext)
+                .fundAnalytics(objectMapper.createArrayNode())
+                .covariance(objectMapper.createObjectNode())
+                .marketContext(objectMapper.createArrayNode())
                 .conversationContext(conversationContext)
                 .warnings(warnings.stream().distinct().limit(8).toList())
                 .build();
@@ -352,8 +300,25 @@ public class PortfolioToolFacade {
     }
 
     private <T> T safeTool(String toolName, Supplier<T> supplier, T fallback) {
+        UUID capturedUserId = ToolExecutionContextHolder.userId().orElseGet(() -> {
+            try {
+                return currentUserProvider.getCurrentUserId();
+            } catch (RuntimeException ignored) {
+                return null;
+            }
+        });
+
         try {
-            return CompletableFuture.supplyAsync(supplier::get)
+            return CompletableFuture.supplyAsync(() -> {
+                        if (capturedUserId != null) {
+                            ToolExecutionContextHolder.setUserId(capturedUserId);
+                        }
+                        try {
+                            return supplier.get();
+                        } finally {
+                            ToolExecutionContextHolder.clear();
+                        }
+                    })
                     .orTimeout(properties.getPerToolTimeoutMs(), TimeUnit.MILLISECONDS)
                     .exceptionally(ex -> {
                         log.warn("Tool {} timed out or failed: {}", toolName, ex.getMessage());

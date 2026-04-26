@@ -1,16 +1,20 @@
 package com.mutualfunds.api.mutual_fund.features.ai.chat.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.AgentContextBundle;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.AgentResponse;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.model.CriticReviewResult;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ToolDetailLevel;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRequest;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -21,36 +25,47 @@ public class CriticAgent {
             You are CriticAgent for a mutual fund copilot.
             Return ONLY valid JSON:
             {"approved":true,"summaryAdjustment":"...","warnings":["..."],"confidenceAdjustment":0.0}
-            Reject overclaiming, stale-data blind spots, or anything that sounds like automatic execution.
+            Tool-first policy:
+            - Verify factual claims using tools or existing memory when needed.
+            - Flag overclaiming, stale-data blind spots, and any implied automatic execution.
+            - Keep critique concise and actionable.
             """;
 
     private final LangChain4jWorkflowEngine workflowEngine;
-    private final ObjectMapper objectMapper;
 
-    public AgentResponse review(AgentContextBundle context, AgentResponse draft) {
+    public AgentResponse review(AgentContextBundle context, AgentResponse draft, UUID conversationId) {
         try {
-            ObjectNode prompt = objectMapper.createObjectNode();
-            prompt.set("context", objectMapper.valueToTree(context));
-            prompt.set("draft", objectMapper.valueToTree(draft));
-
-            LangChain4jWorkflowEngine.Response response = workflowEngine.generate(
-                    SYSTEM_PROMPT,
-                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(prompt));
-            JsonNode node = objectMapper.readTree(stripCodeFence(response.content()));
+            WorkflowResponse<CriticReviewResult> response = workflowEngine.generate(WorkflowRequest.<CriticReviewResult>builder()
+                    .conversationId(conversationId)
+                    .executionUserId(context.getUserId())
+                    .scope("critic")
+                    .route(draft.getWorkflowRoute())
+                    .detailLevel(ToolDetailLevel.ANALYST)
+                    .userQuestion(context.getUserMessage())
+                    .seedContext(seedContext(context, draft))
+                    .systemPrompt(SYSTEM_PROMPT)
+                    .outputType(CriticReviewResult.class)
+                    .selectedTools(List.of(
+                            "getPortfolioSnapshot",
+                            "getPortfolioDiagnostic",
+                            "getRiskProfile",
+                            "computeConcentrationScore",
+                            "computeRiskDeltas",
+                            "assessSuitabilityFit"))
+                    .build());
+            CriticReviewResult node = response.getContent();
 
             List<String> warnings = new ArrayList<>(draft.getWarnings());
-            node.path("warnings").forEach(item -> {
-                if (item.isTextual()) {
-                    warnings.add(item.asText());
-                }
-            });
+            if (node.getWarnings() != null) {
+                warnings.addAll(node.getWarnings());
+            }
             warnings.add("Advisory only. Review the rationale before making any portfolio change.");
 
-            String summary = node.path("summaryAdjustment").asText("").isBlank()
+            String summary = node.getSummaryAdjustment() == null || node.getSummaryAdjustment().isBlank()
                     ? draft.getSummary()
-                    : draft.getSummary() + " " + node.path("summaryAdjustment").asText();
+                    : draft.getSummary() + " " + node.getSummaryAdjustment();
             double confidence = Math.max(0.2, Math.min(0.95,
-                    draft.getConfidence() + node.path("confidenceAdjustment").asDouble(0.0)));
+                    draft.getConfidence() + node.getConfidenceAdjustment()));
 
             return AgentResponse.builder()
                     .summary(summary)
@@ -79,10 +94,14 @@ public class CriticAgent {
         }
     }
 
-    private String stripCodeFence(String content) {
-        if (content == null) {
-            return "{}";
-        }
-        return content.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "");
+    private Map<String, Object> seedContext(AgentContextBundle context, AgentResponse draft) {
+        Map<String, Object> seed = new LinkedHashMap<>();
+        seed.put("route", draft.getWorkflowRoute() == null ? "UNKNOWN" : draft.getWorkflowRoute().name());
+        seed.put("screenContext", context.getScreenContext() == null ? "LANDING" : context.getScreenContext());
+        seed.put("draftSummary", draft.getSummary());
+        seed.put("draftWarnings", draft.getWarnings());
+        seed.put("criticObjective", "Validate evidence quality and remove unsupported claims.");
+        return seed;
     }
+
 }
