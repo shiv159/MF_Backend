@@ -1,12 +1,12 @@
 package com.mutualfunds.api.mutual_fund.features.ai.chat.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.config.AiWorkflowProperties;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ChatIntent;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.IntentDecision;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRoute;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.stereotype.Service;
 
 import java.util.Locale;
@@ -38,7 +38,8 @@ public class IntentRouterService {
     private final AiWorkflowProperties properties;
 
     public IntentRouterService(ChatClient.Builder builder, ObjectMapper objectMapper, AiWorkflowProperties properties) {
-        this.chatClient = builder.build();
+        this.chatClient = builder
+        .defaultAdvisors(new SimpleLoggerAdvisor()).build();
         this.objectMapper = objectMapper;
         this.properties = properties;
     }
@@ -61,7 +62,7 @@ public class IntentRouterService {
         }
 
         try {
-            String raw = chatClient.prompt()
+            IntentDecision aiDecision = chatClient.prompt()
                     .system(CLASSIFIER_PROMPT)
                     .user("""
                             Screen context: %s
@@ -70,18 +71,22 @@ public class IntentRouterService {
                             screenContext == null ? "LANDING" : screenContext,
                             message == null ? "" : message))
                     .call()
-                    .content();
-            if (raw == null || raw.isBlank()) {
+                    .entity(IntentDecision.class);
+
+            if (aiDecision == null || aiDecision.intent() == null || aiDecision.route() == null) {
                 return fallback;
             }
 
-            JsonNode node = objectMapper.readTree(stripCodeFence(raw));
-            ChatIntent intent = ChatIntent.valueOf(node.path("intent").asText(fallback.intent().name()));
-            WorkflowRoute route = WorkflowRoute.valueOf(node.path("route").asText(fallback.route().name()));
-            String toolGroup = node.path("toolGroup").asText(fallback.toolGroup());
-            double confidence = clamp(node.path("confidence").asDouble(fallback.confidence()));
-            boolean requiresConfirmation = node.path("requiresConfirmation").asBoolean(fallback.requiresConfirmation());
-            return new IntentDecision(intent, toolGroup, route, confidence, requiresConfirmation);
+            String toolGroup = (aiDecision.toolGroup() == null || aiDecision.toolGroup().isBlank())
+                    ? fallback.toolGroup()
+                    : aiDecision.toolGroup();
+
+            return new IntentDecision(
+                    aiDecision.intent(),
+                    toolGroup,
+                    aiDecision.route(),
+                    clamp(aiDecision.confidence()),
+                    aiDecision.requiresConfirmation());
         } catch (Exception ignored) {
             return fallback;
         }
@@ -174,10 +179,6 @@ public class IntentRouterService {
             }
         }
         return false;
-    }
-
-    private String stripCodeFence(String content) {
-        return content.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "");
     }
 
     private double clamp(double value) {
