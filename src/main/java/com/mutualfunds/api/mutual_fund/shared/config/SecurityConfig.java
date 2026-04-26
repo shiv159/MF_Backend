@@ -1,5 +1,6 @@
 package com.mutualfunds.api.mutual_fund.shared.config;
 
+import com.mutualfunds.api.mutual_fund.shared.security.ApiRateLimitingFilter;
 import com.mutualfunds.api.mutual_fund.shared.security.JWTAuthenticationFilter;
 import com.mutualfunds.api.mutual_fund.shared.security.oauth2.OAuth2LoginSuccessHandler;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final ApiRateLimitingFilter apiRateLimitingFilter;
     private final JWTAuthenticationFilter jwtAuthenticationFilter;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
 
@@ -52,6 +54,7 @@ public class SecurityConfig {
                 .exceptionHandling(e -> e
                         .defaultAuthenticationEntryPointFor(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                                 new AntPathRequestMatcher("/api/**")))
+                .addFilterBefore(apiRateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

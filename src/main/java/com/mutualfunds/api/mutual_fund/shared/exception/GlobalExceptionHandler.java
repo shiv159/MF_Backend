@@ -1,6 +1,7 @@
 package com.mutualfunds.api.mutual_fund.shared.exception;
 
 import com.mutualfunds.api.mutual_fund.shared.dto.ErrorResponse;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -265,6 +266,27 @@ public class GlobalExceptionHandler {
                                 .build();
 
                 return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(errorResponse);
+        }
+
+        /**
+         * Handle rate limit errors
+         * Returns 429 Too Many Requests
+         */
+        @ExceptionHandler(RequestNotPermitted.class)
+        public ResponseEntity<ErrorResponse> handleRateLimitExceeded(
+                        RequestNotPermitted ex,
+                        HttpServletRequest request) {
+
+                log.warn("Rate limit exceeded on {}: {}", request.getRequestURI(), ex.getMessage());
+
+                ErrorResponse errorResponse = ErrorResponse.builder()
+                                .status(HttpStatus.TOO_MANY_REQUESTS.value())
+                                .error("RATE_LIMIT_EXCEEDED")
+                                .message("Too many requests. Please wait before trying again.")
+                                .path(request.getRequestURI())
+                                .build();
+
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(errorResponse);
         }
 
         /**

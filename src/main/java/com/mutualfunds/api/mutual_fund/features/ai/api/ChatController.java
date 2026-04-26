@@ -3,6 +3,7 @@ package com.mutualfunds.api.mutual_fund.features.ai.api;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatMessageRequest;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatStreamEvent;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.StarterPromptsResponse;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.service.ChatAuditService;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.service.PortfolioAgentService;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.service.StarterPromptService;
 import com.mutualfunds.api.mutual_fund.shared.security.UserPrincipal;
@@ -31,11 +32,13 @@ public class ChatController {
 
     private final PortfolioAgentService portfolioAgentService;
     private final StarterPromptService starterPromptService;
+    private final ChatAuditService chatAuditService;
 
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<ServerSentEvent<ChatStreamEvent>> streamMessage(@Valid @RequestBody ChatMessageRequest request,
             Authentication authentication) {
         UUID userId = extractUserId(authentication);
+        chatAuditService.recordMessage(userId, request);
         return portfolioAgentService.streamMessage(userId, request)
                 .map(event -> ServerSentEvent.<ChatStreamEvent>builder()
                         .event(event.getType())
