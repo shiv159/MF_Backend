@@ -15,7 +15,7 @@ class LangChain4jConversationMemoryTest {
         AiWorkflowProperties properties = new AiWorkflowProperties();
         properties.setMemoryWindowMessages(2);
         properties.setMemoryWindowTokens(1000);
-        LangChain4jConversationMemory memory = new LangChain4jConversationMemory(properties);
+        LangChain4jConversationMemory memory = new LangChain4jConversationMemory(properties, new TiktokenTokenCounter());
 
         memory.append("conversation", List.of(
                 UserMessage.from("first"),
@@ -33,7 +33,7 @@ class LangChain4jConversationMemoryTest {
         AiWorkflowProperties properties = new AiWorkflowProperties();
         properties.setMemoryWindowMessages(10);
         properties.setMemoryWindowTokens(8);
-        LangChain4jConversationMemory memory = new LangChain4jConversationMemory(properties);
+        LangChain4jConversationMemory memory = new LangChain4jConversationMemory(properties, new TiktokenTokenCounter());
 
         memory.append("conversation", List.of(
                 UserMessage.from("12345678"),

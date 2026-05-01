@@ -8,6 +8,8 @@ import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ToolDetailLevel;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRequest;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowResponse;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRoute;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptId;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -22,17 +24,8 @@ import java.util.UUID;
 @Slf4j
 public class MarketAnalystAgent {
 
-    private static final String SYSTEM_PROMPT = """
-            You are MarketAnalystAgent for a portfolio copilot.
-            Return ONLY valid JSON:
-            {"benchmarkContext":"...","categoryContext":"...","marketEvidence":["..."],"marketWarnings":["..."],"freshnessStatus":"FRESH|STALE|MISSING|MIXED","confidence":0.0}
-            Tool-first policy:
-            - Use fund and analytics tools before making comparative claims.
-            - Do not cite external news or macro feeds.
-            - If required facts are not present in seed context or memory, call tools.
-            """;
-
     private final LangChain4jWorkflowEngine workflowEngine;
+    private final PromptRegistry promptRegistry;
 
     public MarketAssessmentResult analyze(WorkflowRoute route, AgentContextBundle context, UUID conversationId) {
         MarketAssessmentResult deterministic = deterministicContext(context);
@@ -45,17 +38,9 @@ public class MarketAnalystAgent {
                     .detailLevel(ToolDetailLevel.ANALYST)
                     .userQuestion(context.getUserMessage())
                     .seedContext(seedContext(route, context))
-                    .systemPrompt(SYSTEM_PROMPT)
+                        .systemPrompt(promptRegistry.text(PromptId.MARKET_ANALYST_SYSTEM))
                     .outputType(MarketAssessmentResult.class)
-                    .selectedTools(List.of(
-                            "getFundSnapshot",
-                            "getFundComposition",
-                            "getFundRiskMetrics",
-                            "getFundPerformanceSummary",
-                            "computeRiskDeltas",
-                            "computeTrendAndDrawdown",
-                            "computeWeightedEsgExposure",
-                            "compareFunds"))
+                        .selectedTools(ToolSelectionCatalog.MARKET_ANALYST)
                     .build());
             return response.getContent();
         } catch (Exception ex) {

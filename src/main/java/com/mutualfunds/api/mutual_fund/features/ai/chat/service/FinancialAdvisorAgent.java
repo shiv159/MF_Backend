@@ -11,6 +11,8 @@ import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ToolDetailLevel;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRequest;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowResponse;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRoute;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptId;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,19 +28,9 @@ import java.util.UUID;
 @Slf4j
 public class FinancialAdvisorAgent {
 
-    private static final String SYSTEM_PROMPT = """
-            You are FinancialAdvisorAgent for a mutual fund portfolio copilot.
-            Return ONLY valid JSON:
-            {"summary":"...","warnings":["..."],"confidence":0.0}
-            Rules:
-            - Advisory only. Do not imply execution.
-            - Use tools for factual claims when needed.
-            - If facts are missing from seed context or memory, call tools.
-            - Mention uncertainty briefly when context is stale or incomplete.
-            """;
-
     private final LangChain4jWorkflowEngine workflowEngine;
     private final ObjectMapper objectMapper;
+        private final PromptRegistry promptRegistry;
 
     public AgentResponse advise(
             AgentContextBundle context,
@@ -55,20 +47,9 @@ public class FinancialAdvisorAgent {
                     .detailLevel(ToolDetailLevel.ANALYST)
                     .userQuestion(context.getUserMessage())
                     .seedContext(seedContext(route, context, riskAssessment, marketAssessment))
-                    .systemPrompt(SYSTEM_PROMPT)
+                    .systemPrompt(promptRegistry.text(PromptId.FINANCIAL_ADVISOR_SYSTEM))
                     .outputType(AdvisorAssessmentResult.class)
-                    .selectedTools(List.of(
-                            "getPortfolioSnapshot",
-                            "getPortfolioDiagnostic",
-                            "getRiskProfile",
-                            "compareFunds",
-                            "draftRebalance",
-                            "computeConcentrationScore",
-                            "computeOverlap",
-                            "computeRiskDeltas",
-                            "computeTrendAndDrawdown",
-                            "computeWeightedEsgExposure",
-                            "assessSuitabilityFit"))
+                    .selectedTools(ToolSelectionCatalog.FINANCIAL_ADVISOR)
                     .build());
             AdvisorAssessmentResult node = response.getContent();
             List<String> warnings = new ArrayList<>(context.getWarnings());

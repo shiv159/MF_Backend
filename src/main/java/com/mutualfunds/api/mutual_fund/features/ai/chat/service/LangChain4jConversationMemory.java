@@ -18,10 +18,12 @@ public class LangChain4jConversationMemory {
     private final Map<String, Integer> tokenWindows = new ConcurrentHashMap<>();
     private final int maxMessages;
     private final int maxTokens;
+    private final TokenCounter tokenCounter;
 
-    public LangChain4jConversationMemory(AiWorkflowProperties properties) {
+    public LangChain4jConversationMemory(AiWorkflowProperties properties, TokenCounter tokenCounter) {
         this.maxMessages = Math.max(1, properties.getMemoryWindowMessages());
         this.maxTokens = Math.max(1, properties.getMemoryWindowTokens());
+        this.tokenCounter = tokenCounter;
     }
 
     public List<ChatMessage> history(String key) {
@@ -76,6 +78,6 @@ public class LangChain4jConversationMemory {
         if (serialized == null || serialized.isBlank()) {
             return 1;
         }
-        return Math.max(1, serialized.length() / 4);
+        return tokenCounter.countTokens(serialized);
     }
 }

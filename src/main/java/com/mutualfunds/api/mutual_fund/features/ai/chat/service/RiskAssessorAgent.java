@@ -6,6 +6,8 @@ import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ToolDetailLevel;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRequest;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowResponse;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRoute;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptId;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -20,18 +22,8 @@ import java.util.UUID;
 @Slf4j
 public class RiskAssessorAgent {
 
-    private static final String SYSTEM_PROMPT = """
-            You are RiskAssessorAgent for a mutual fund copilot.
-            Return ONLY valid JSON with:
-            {"summary":"...","riskShift":"LOWER|HIGHER|STABLE","concentration":"...","warnings":["..."],"confidence":0.0}
-            Tool-first policy:
-            - If a factual portfolio/fund/risk value is needed and missing, call a tool.
-            - Do not invent portfolio or fund facts.
-            - Reuse memory from prior tool calls when available.
-            - Keep output concise and strictly in the requested JSON shape.
-            """;
-
     private final LangChain4jWorkflowEngine workflowEngine;
+    private final PromptRegistry promptRegistry;
 
     public RiskAssessmentResult analyze(WorkflowRoute route, AgentContextBundle context, UUID conversationId) {
         try {
@@ -43,15 +35,9 @@ public class RiskAssessorAgent {
                     .detailLevel(ToolDetailLevel.ANALYST)
                     .userQuestion(context.getUserMessage())
                     .seedContext(seedContext(route, context))
-                    .systemPrompt(SYSTEM_PROMPT)
+                        .systemPrompt(promptRegistry.text(PromptId.RISK_ASSESSOR_SYSTEM))
                     .outputType(RiskAssessmentResult.class)
-                    .selectedTools(List.of(
-                            "getPortfolioSnapshot",
-                            "getPortfolioDiagnostic",
-                            "getRiskProfile",
-                            "computeConcentrationScore",
-                            "computeRiskDeltas",
-                            "assessSuitabilityFit"))
+                        .selectedTools(ToolSelectionCatalog.RISK_ASSESSOR)
                     .build());
             return response.getContent();
         } catch (Exception ex) {

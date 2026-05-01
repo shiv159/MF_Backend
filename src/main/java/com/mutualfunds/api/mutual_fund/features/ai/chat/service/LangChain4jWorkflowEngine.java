@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -60,6 +61,7 @@ public class LangChain4jWorkflowEngine {
     private String apiKey;
 
     private final Map<String, ToolMethodBinding> toolBindings = new LinkedHashMap<>();
+    private final Map<String, ChatModel> modelCache = new ConcurrentHashMap<>();
 
     @PostConstruct
     void initializeToolBindings() {
@@ -67,6 +69,7 @@ public class LangChain4jWorkflowEngine {
         registerToolBindings(fundDataTools);
         registerToolBindings(fundAnalyticsTools);
         registerToolBindings(recommendationTools);
+        validateSelectedTools();
     }
 
     public <T> WorkflowResponse<T> generate(WorkflowRequest<T> request) {
@@ -95,15 +98,7 @@ public class LangChain4jWorkflowEngine {
         long startedAt = System.currentTimeMillis();
         ToolExecutionContextHolder.setUserId(request.getExecutionUserId());
         try {
-            ChatModel model = OpenAiChatModel.builder()
-                    .baseUrl(properties.getLangchain4j().getBaseUrl())
-                    .apiKey(apiKey)
-                    .modelName(modelProfile)
-                    .temperature(properties.getLangchain4j().getTemperature())
-                    .timeout(Duration.ofSeconds(60))
-                    .logRequests(properties.getLangchain4j().isLogRequests())
-                    .logResponses(properties.getLangchain4j().isLogResponses())
-                    .build();
+            ChatModel model = resolveModel(modelProfile);
 
             List<ToolSpecification> toolSpecifications = resolveTools(request.getSelectedTools());
             String memoryKey = memoryKey(request);
@@ -329,6 +324,39 @@ public class LangChain4jWorkflowEngine {
                 .filter(Objects::nonNull)
                 .map(ToolMethodBinding::specification)
                 .toList();
+    }
+
+    private ChatModel resolveModel(String modelProfile) {
+        if (modelProfile == null || modelProfile.isBlank()) {
+            throw new IllegalArgumentException("Model profile must not be blank");
+        }
+        return modelCache.computeIfAbsent(modelProfile, profile -> OpenAiChatModel.builder()
+                .baseUrl(properties.getLangchain4j().getBaseUrl())
+                .apiKey(apiKey)
+                .modelName(profile)
+                .temperature(properties.getLangchain4j().getTemperature())
+                .timeout(Duration.ofSeconds(60))
+                .logRequests(properties.getLangchain4j().isLogRequests())
+                .logResponses(properties.getLangchain4j().isLogResponses())
+                .build());
+    }
+
+    private void validateSelectedTools() {
+        List<String> configured = ToolSelectionCatalog.allSelectedTools();
+        if (configured.isEmpty()) {
+            return;
+        }
+        List<String> unknown = configured.stream()
+                .filter(name -> !toolBindings.containsKey(name))
+                .toList();
+        if (!unknown.isEmpty()) {
+            log.error("Tool registry missing bindings for selected tools: {}", unknown);
+            throw new IllegalStateException("Tool registry missing bindings for selected tools: " + unknown);
+        }
+        List<String> registered = toolBindings.keySet().stream().sorted().toList();
+        log.info("Tool registry validation OK. registeredTools={} selectedTools={}",
+                registered,
+                configured);
     }
 
     private void registerToolBindings(Object toolBean) {

@@ -6,6 +6,8 @@ import com.mutualfunds.api.mutual_fund.features.ai.chat.model.CriticReviewResult
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ToolDetailLevel;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRequest;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowResponse;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptId;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,17 +23,8 @@ import java.util.UUID;
 @Slf4j
 public class CriticAgent {
 
-    private static final String SYSTEM_PROMPT = """
-            You are CriticAgent for a mutual fund copilot.
-            Return ONLY valid JSON:
-            {"approved":true,"summaryAdjustment":"...","warnings":["..."],"confidenceAdjustment":0.0}
-            Tool-first policy:
-            - Verify factual claims using tools or existing memory when needed.
-            - Flag overclaiming, stale-data blind spots, and any implied automatic execution.
-            - Keep critique concise and actionable.
-            """;
-
     private final LangChain4jWorkflowEngine workflowEngine;
+        private final PromptRegistry promptRegistry;
 
     public AgentResponse review(AgentContextBundle context, AgentResponse draft, UUID conversationId) {
         try {
@@ -43,15 +36,9 @@ public class CriticAgent {
                     .detailLevel(ToolDetailLevel.ANALYST)
                     .userQuestion(context.getUserMessage())
                     .seedContext(seedContext(context, draft))
-                    .systemPrompt(SYSTEM_PROMPT)
+                    .systemPrompt(promptRegistry.text(PromptId.CRITIC_SYSTEM))
                     .outputType(CriticReviewResult.class)
-                    .selectedTools(List.of(
-                            "getPortfolioSnapshot",
-                            "getPortfolioDiagnostic",
-                            "getRiskProfile",
-                            "computeConcentrationScore",
-                            "computeRiskDeltas",
-                            "assessSuitabilityFit"))
+                    .selectedTools(ToolSelectionCatalog.CRITIC)
                     .build());
             CriticReviewResult node = response.getContent();
 

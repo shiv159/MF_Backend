@@ -22,12 +22,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-class PortfolioAiToolsTest {
+class PortfolioToolFamiliesTest {
 
     @Mock
     private PortfolioToolFacade portfolioToolFacade;
@@ -39,14 +38,23 @@ class PortfolioAiToolsTest {
     private FundQueryService fundQueryService;
 
     private ObjectMapper objectMapper;
-    private PortfolioAiTools tools;
+    private FundDataTools fundDataTools;
+    private FundAnalyticsTools fundAnalyticsTools;
+    private RecommendationTools recommendationTools;
     private Fund fundA;
     private Fund fundB;
 
     @BeforeEach
     void setUp() throws Exception {
         objectMapper = new ObjectMapper();
-        tools = new PortfolioAiTools(portfolioToolFacade, payloadFactory, fundQueryService, objectMapper);
+        PortfolioAiToolSupport support = new PortfolioAiToolSupport(
+                portfolioToolFacade,
+                payloadFactory,
+                fundQueryService,
+                objectMapper);
+        fundAnalyticsTools = new FundAnalyticsTools(support);
+        fundDataTools = new FundDataTools(support, fundAnalyticsTools);
+        recommendationTools = new RecommendationTools(support, fundDataTools, fundAnalyticsTools);
 
         fundA = sampleFund(
                 UUID.fromString("65f8b7b6-e359-474f-9bfe-dd79dee23355"),
@@ -103,8 +111,8 @@ class PortfolioAiToolsTest {
 
     @Test
     void shouldReturnCompactAndAnalystFundSnapshots() {
-        ObjectNode compact = (ObjectNode) tools.getFundSnapshot(fundA.getFundId().toString(), Optional.empty());
-        ObjectNode analyst = (ObjectNode) tools.getFundSnapshot(fundA.getFundId().toString(), Optional.of("ANALYST"));
+        ObjectNode compact = (ObjectNode) fundDataTools.getFundSnapshot(fundA.getFundId().toString(), Optional.empty());
+        ObjectNode analyst = (ObjectNode) fundDataTools.getFundSnapshot(fundA.getFundId().toString(), Optional.of("ANALYST"));
 
         assertThat(compact.path("detailLevel").asText()).isEqualTo("COMPACT");
         assertThat(compact.path("topSectors")).hasSize(4);
@@ -115,11 +123,11 @@ class PortfolioAiToolsTest {
 
     @Test
     void shouldComputeOverlapAndRiskDeltas() {
-        ObjectNode overlap = (ObjectNode) tools.computeOverlap(
+        ObjectNode overlap = (ObjectNode) fundAnalyticsTools.computeOverlap(
                 fundA.getFundId().toString(),
                 fundB.getFundId().toString(),
                 Optional.of("ANALYST"));
-        ObjectNode risk = (ObjectNode) tools.computeRiskDeltas(
+        ObjectNode risk = (ObjectNode) fundAnalyticsTools.computeRiskDeltas(
                 fundA.getFundId().toString(),
                 Optional.of("3Y"),
                 Optional.empty());
@@ -142,13 +150,13 @@ class PortfolioAiToolsTest {
                 .build();
         when(portfolioToolFacade.findRiskProfile()).thenReturn(Optional.of(profile));
 
-        ObjectNode esg = (ObjectNode) tools.computeWeightedEsgExposure(
+        ObjectNode esg = (ObjectNode) fundAnalyticsTools.computeWeightedEsgExposure(
                 fundA.getFundId().toString(),
                 Optional.of("ANALYST"));
-        ObjectNode concentration = (ObjectNode) tools.computeConcentrationScore(
+        ObjectNode concentration = (ObjectNode) fundAnalyticsTools.computeConcentrationScore(
                 fundA.getFundId().toString(),
                 Optional.empty());
-        ObjectNode suitability = (ObjectNode) tools.assessSuitabilityFit(
+        ObjectNode suitability = (ObjectNode) recommendationTools.assessSuitabilityFit(
                 List.of(fundA.getFundId().toString(), fundB.getFundId().toString()),
                 Optional.of("ANALYST"));
 
