@@ -1,54 +1,42 @@
 package com.mutualfunds.api.mutual_fund.features.ai.chat.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.config.AiWorkflowProperties;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ChatIntent;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.IntentDecision;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRoute;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptId;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptRegistry;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
+import java.util.Comparator;
 import java.util.Locale;
+import java.util.Objects;
+import java.util.stream.Stream;
 
 @Service
+@Slf4j
 public class IntentRouterService {
 
-    private static final String CLASSIFIER_PROMPT = """
-            You are an intent router for a mutual fund portfolio copilot.
-            Return ONLY valid JSON with this exact shape:
-            {"intent":"...","toolGroup":"...","route":"...","confidence":0.0,"requiresConfirmation":false}
-
-            Allowed intents:
-            REBALANCE_DRAFT, SCENARIO_ANALYSIS, DATA_QUALITY, FUND_COMPARE, FUND_RISK, FUND_PERFORMANCE,
-            RISK_PROFILE_EXPLAINER, DIAGNOSTIC_EXPLAINER, PORTFOLIO_SUMMARY, GENERAL_QA
-
-            Allowed routes:
-            SPRING_STANDARD_CHAT, LC4J_SCENARIO_ANALYSIS, LC4J_REBALANCE_CRITIQUE,
-            LC4J_RECOMMENDATION_SYNTHESIS, SPRING_FALLBACK_CHAT
-
-            Use SCENARIO_ANALYSIS for "what if", SIP change, allocation-shift, debt/equity mix simulation.
-            Use LC4J_REBALANCE_CRITIQUE only when the user is asking to critique, explain, or refine a rebalance idea.
-            Use LC4J_RECOMMENDATION_SYNTHESIS for suitability-aware comparison or recommendation synthesis.
-            Keep requiresConfirmation true only for rebalance-like recommendations.
-            """;
-
     private final ChatClient chatClient;
-    private final ObjectMapper objectMapper;
     private final AiWorkflowProperties properties;
+    private final PromptRegistry promptRegistry;
 
-    public IntentRouterService(ChatClient.Builder builder, ObjectMapper objectMapper, AiWorkflowProperties properties) {
+    public IntentRouterService(ChatClient.Builder builder, AiWorkflowProperties properties,
+            PromptRegistry promptRegistry) {
         this.chatClient = builder
-        .defaultAdvisors(new SimpleLoggerAdvisor()).build();
-        this.objectMapper = objectMapper;
+                .defaultAdvisors(new SimpleLoggerAdvisor()).build();
         this.properties = properties;
+        this.promptRegistry = promptRegistry;
     }
 
-    IntentRouterService() {
+    public IntentRouterService() {
         this.chatClient = null;
-        this.objectMapper = new ObjectMapper();
         this.properties = AiWorkflowProperties.defaults();
         this.properties.setClassifierEnabled(false);
+        this.promptRegistry = new PromptRegistry();
     }
 
     public ChatIntent resolveIntent(String message, String screenContext) {
@@ -63,7 +51,7 @@ public class IntentRouterService {
 
         try {
             IntentDecision aiDecision = chatClient.prompt()
-                    .system(CLASSIFIER_PROMPT)
+                .system(promptRegistry.text(PromptId.INTENT_CLASSIFIER))
                     .user("""
                             Screen context: %s
                             User message: %s
@@ -87,89 +75,182 @@ public class IntentRouterService {
                     aiDecision.route(),
                     clamp(aiDecision.confidence()),
                     aiDecision.requiresConfirmation());
-        } catch (Exception ignored) {
+        } catch (Exception ex) {
+            log.warn("Intent classifier failed; falling back to keyword scoring: {}", ex.getMessage());
             return fallback;
         }
     }
 
     private IntentDecision resolveKeywordDecision(String message, String screenContext) {
-        String normalized = message == null ? "" : message.toLowerCase(Locale.ROOT).trim();
+        String normalized = normalize(message);
         String context = screenContext == null ? "" : screenContext.toUpperCase(Locale.ROOT);
 
-        if (mentionsScenario(normalized)) {
-            return new IntentDecision(ChatIntent.SCENARIO_ANALYSIS, "SIMULATE",
-                    WorkflowRoute.LC4J_SCENARIO_ANALYSIS, 0.84, false);
-        }
+        IntentScore scenario = new IntentScore(ChatIntent.SCENARIO_ANALYSIS,
+                scoreScenario(normalized, context));
+        IntentScore rebalance = new IntentScore(ChatIntent.REBALANCE_DRAFT,
+                scoreRebalance(normalized, context));
+        IntentScore dataQuality = new IntentScore(ChatIntent.DATA_QUALITY,
+                scoreDataQuality(normalized, context));
+        IntentScore compare = new IntentScore(ChatIntent.FUND_COMPARE,
+                scoreCompare(normalized, context));
+        IntentScore fundRisk = new IntentScore(ChatIntent.FUND_RISK,
+                scoreFundRisk(normalized, context));
+        IntentScore fundPerformance = new IntentScore(ChatIntent.FUND_PERFORMANCE,
+                scoreFundPerformance(normalized, context));
+        IntentScore riskProfile = new IntentScore(ChatIntent.RISK_PROFILE_EXPLAINER,
+                scoreRiskProfile(normalized, context));
+        IntentScore diagnostic = new IntentScore(ChatIntent.DIAGNOSTIC_EXPLAINER,
+                scoreDiagnostic(normalized, context));
+        IntentScore portfolio = new IntentScore(ChatIntent.PORTFOLIO_SUMMARY,
+                scorePortfolioSummary(normalized, context));
+        IntentScore general = new IntentScore(ChatIntent.GENERAL_QA,
+                scoreGeneral(normalized));
 
-        if (containsAny(normalized, "rebalance", "reduce risk", "switch fund", "switch funds", "reallocate",
-                "improve allocation")) {
-            WorkflowRoute route = containsAny(normalized, "why", "critique", "better option", "trade-off", "review this")
+        IntentScore top = Stream.of(scenario, rebalance, dataQuality, compare, fundRisk, fundPerformance,
+                        riskProfile, diagnostic, portfolio, general)
+                .max(Comparator.comparingDouble(IntentScore::score))
+                .orElse(general);
+
+        IntentScore runnerUp = Stream.of(scenario, rebalance, dataQuality, compare, fundRisk, fundPerformance,
+                        riskProfile, diagnostic, portfolio, general)
+                .filter(score -> !Objects.equals(score.intent(), top.intent()))
+                .max(Comparator.comparingDouble(IntentScore::score))
+                .orElse(general);
+
+        WorkflowRoute route = routeForIntent(top.intent(), normalized);
+        String toolGroup = toolGroupForIntent(top.intent());
+        boolean requiresConfirmation = top.intent() == ChatIntent.REBALANCE_DRAFT;
+        double confidence = computeConfidence(top.score(), runnerUp.score());
+
+        return new IntentDecision(top.intent(), toolGroup, route, confidence, requiresConfirmation);
+    }
+
+    private String normalize(String message) {
+        return message == null ? "" : message.toLowerCase(Locale.ROOT).trim();
+    }
+
+    private double scoreScenario(String normalized, String context) {
+        double score = scoreAny(normalized, 1.6,
+                "what if", "scenario", "simulate", "sip", "allocation shift", "shift to debt", "shift to equity",
+                "more conservative", "more aggressive");
+        score += scoreAny(normalized, 0.6, "move 10%", "move 5%", "move 20%", "increase sip", "decrease sip");
+        return score + contextBoost(context, "SCENARIO", 0.4);
+    }
+
+    private double scoreRebalance(String normalized, String context) {
+        double score = scoreAny(normalized, 1.7,
+                "rebalance", "reallocate", "switch fund", "switch funds", "reduce risk", "improve allocation");
+        score += scoreAny(normalized, 0.5, "critique", "review", "trade-off", "why", "better option");
+        return score + contextBoost(context, "MANUAL_SELECTION_RESULT", 0.3);
+    }
+
+    private double scoreDataQuality(String normalized, String context) {
+        double score = scoreAny(normalized, 1.8,
+                "stale", "freshness", "outdated", "missing data", "enrichment", "missing nav", "data quality");
+        return score + contextBoost(context, "DATA_QUALITY", 0.2);
+    }
+
+    private double scoreCompare(String normalized, String context) {
+        double score = scoreAny(normalized, 1.7,
+                " compare ", " vs ", " versus ", "better than", "which fund", "two funds", "which of these");
+        score += scoreAny(normalized, 0.6, "recommend", "which should i pick", "for my profile", "better for my");
+        if (normalized.contains("better") && normalized.contains("fund")) {
+            score += 0.6;
+        }
+        return score + contextBoost(context, "COMPARE", 0.2);
+    }
+
+    private double scoreFundRisk(String normalized, String context) {
+        double score = scoreAny(normalized, 1.4, "fund risk", "beta", "alpha", "volatility", "standard deviation");
+        if (normalized.contains("risk") && !normalized.contains("portfolio")) {
+            score += 0.7;
+        }
+        return score + contextBoost(context, "RISK", 0.1);
+    }
+
+    private double scoreFundPerformance(String normalized, String context) {
+        double score = scoreAny(normalized, 1.4,
+                "performance", "return", "returns", "cagr", "rolling return", "top performer", "perform", "performed");
+        if (normalized.contains("over") && normalized.contains("year")) {
+            score += 0.4;
+        }
+        return score + contextBoost(context, "PERFORMANCE", 0.1);
+    }
+
+    private double scoreRiskProfile(String normalized, String context) {
+        double score = scoreAny(normalized, 1.4,
+                "why was i rated", "why this allocation", "what should i start with", "explain my risk profile");
+        return score + contextBoost(context, "RISK_PROFILE_RESULT", 1.2);
+    }
+
+    private double scoreDiagnostic(String normalized, String context) {
+        double score = scoreAny(normalized, 1.3, "what is wrong", "what's wrong", "diagnostic", "overlap", "improve my portfolio");
+        return score + contextBoost(context, "MANUAL_SELECTION_RESULT", 1.1);
+    }
+
+    private double scorePortfolioSummary(String normalized, String context) {
+        double score = scoreAny(normalized, 1.2, "analyze my portfolio", "portfolio summary", "my holdings", "portfolio", "summary");
+        score += normalized.contains("analyze") ? 0.4 : 0.0;
+        return score + contextBoost(context, "PORTFOLIO", 0.2);
+    }
+
+    private double scoreGeneral(String normalized) {
+        double score = normalized.isBlank() ? 0.1 : 0.4;
+        if (normalized.contains("recommend for me") || normalized.contains("for my profile")) {
+            score += 0.4;
+        }
+        return score;
+    }
+
+    private WorkflowRoute routeForIntent(ChatIntent intent, String normalized) {
+        return switch (intent) {
+            case SCENARIO_ANALYSIS -> WorkflowRoute.LC4J_SCENARIO_ANALYSIS;
+            case REBALANCE_DRAFT -> containsAny(normalized, "why", "critique", "better option", "trade-off", "review")
                     ? WorkflowRoute.LC4J_REBALANCE_CRITIQUE
                     : WorkflowRoute.SPRING_STANDARD_CHAT;
-            return new IntentDecision(ChatIntent.REBALANCE_DRAFT, "REBALANCE", route, 0.86, true);
-        }
-
-        if (containsAny(normalized, "stale", "freshness", "outdated", "missing data", "enrichment", "missing nav",
-                "data quality")) {
-            return new IntentDecision(ChatIntent.DATA_QUALITY, "DATA_QUALITY",
-                    WorkflowRoute.SPRING_STANDARD_CHAT, 0.9, false);
-        }
-
-        if (containsAny(normalized, " compare ", " vs ", " versus ", "better than")) {
-            WorkflowRoute route = containsAny(normalized, "for my profile", "which should i pick", "recommend", "why did you suggest")
+            case FUND_COMPARE, GENERAL_QA -> containsAny(normalized, "for my profile", "which should i pick",
+                    "recommend", "why did you suggest", "recommend for me")
                     ? WorkflowRoute.LC4J_RECOMMENDATION_SYNTHESIS
                     : WorkflowRoute.SPRING_STANDARD_CHAT;
-            return new IntentDecision(ChatIntent.FUND_COMPARE, "COMPARE", route, 0.81, false);
-        }
-
-        if (mentionsFundRisk(normalized)) {
-            return new IntentDecision(ChatIntent.FUND_RISK, "FUND_ANALYTICS",
-                    WorkflowRoute.SPRING_STANDARD_CHAT, 0.8, false);
-        }
-
-        if (mentionsFundPerformance(normalized)) {
-            return new IntentDecision(ChatIntent.FUND_PERFORMANCE, "FUND_ANALYTICS",
-                    WorkflowRoute.SPRING_STANDARD_CHAT, 0.8, false);
-        }
-
-        if ("RISK_PROFILE_RESULT".equals(context)
-                || containsAny(normalized, "why was i rated", "why this allocation", "what should i start with",
-                        "explain my risk profile")) {
-            return new IntentDecision(ChatIntent.RISK_PROFILE_EXPLAINER, "EXPLAIN",
-                    WorkflowRoute.SPRING_STANDARD_CHAT, 0.82, false);
-        }
-
-        if ("MANUAL_SELECTION_RESULT".equals(context)
-                || containsAny(normalized, "what is wrong", "what's wrong", "diagnostic", "overlap", "improve my portfolio")) {
-            return new IntentDecision(ChatIntent.DIAGNOSTIC_EXPLAINER, "DIAGNOSE",
-                    WorkflowRoute.SPRING_STANDARD_CHAT, 0.82, false);
-        }
-
-        if (containsAny(normalized, "analyze my portfolio", "portfolio summary", "my holdings", "portfolio",
-                "analyze", "summary")) {
-            return new IntentDecision(ChatIntent.PORTFOLIO_SUMMARY, "PORTFOLIO",
-                    WorkflowRoute.SPRING_STANDARD_CHAT, 0.74, false);
-        }
-
-        WorkflowRoute route = containsAny(normalized, "for my profile", "why did you suggest", "recommend for me")
-                ? WorkflowRoute.LC4J_RECOMMENDATION_SYNTHESIS
-                : WorkflowRoute.SPRING_STANDARD_CHAT;
-        return new IntentDecision(ChatIntent.GENERAL_QA, "GENERAL", route, 0.56, false);
+            default -> WorkflowRoute.SPRING_STANDARD_CHAT;
+        };
     }
 
-    private boolean mentionsScenario(String message) {
-        return containsAny(message, "what if", "scenario", "simulate", "sip", "move 10%", "move 5%", "shift to debt",
-                "shift to equity", "more conservative", "more aggressive", "allocation shift");
+    private String toolGroupForIntent(ChatIntent intent) {
+        return switch (intent) {
+            case SCENARIO_ANALYSIS -> "SIMULATE";
+            case REBALANCE_DRAFT -> "REBALANCE";
+            case DATA_QUALITY -> "DATA_QUALITY";
+            case FUND_COMPARE -> "COMPARE";
+            case FUND_RISK, FUND_PERFORMANCE -> "FUND_ANALYTICS";
+            case RISK_PROFILE_EXPLAINER -> "EXPLAIN";
+            case DIAGNOSTIC_EXPLAINER -> "DIAGNOSE";
+            case PORTFOLIO_SUMMARY -> "PORTFOLIO";
+            case GENERAL_QA -> "GENERAL";
+        };
     }
 
-    private boolean mentionsFundRisk(String message) {
-        return containsAny(message, " fund risk", "beta", "alpha", "volatility", "risk label", "standard deviation")
-                || (message.contains("risk") && !message.contains("portfolio"));
+    private double computeConfidence(double topScore, double runnerUpScore) {
+        double base = Math.min(0.92, 0.45 + (topScore / 8.0));
+        double separation = Math.min(0.2, Math.max(0.0, (topScore - runnerUpScore) / 8.0));
+        return clamp(base + separation);
     }
 
-    private boolean mentionsFundPerformance(String message) {
-        return containsAny(message, "performance", "return", "returns", "cagr", "rolling return", "top performer",
-                "performing");
+    private double scoreAny(String normalized, double weight, String... needles) {
+        double score = 0.0;
+        for (String needle : needles) {
+            if (needle == null || needle.isBlank()) {
+                continue;
+            }
+            if (normalized.contains(needle)) {
+                score += weight;
+            }
+        }
+        return score;
+    }
+
+    private double contextBoost(String context, String needle, double boost) {
+        return context != null && context.contains(needle) ? boost : 0.0;
     }
 
     private boolean containsAny(String value, String... needles) {
@@ -183,5 +264,8 @@ public class IntentRouterService {
 
     private double clamp(double value) {
         return Math.max(0.0, Math.min(1.0, value));
+    }
+
+    private record IntentScore(ChatIntent intent, double score) {
     }
 }

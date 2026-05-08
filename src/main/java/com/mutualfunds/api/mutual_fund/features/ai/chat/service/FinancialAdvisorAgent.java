@@ -1,63 +1,67 @@
 package com.mutualfunds.api.mutual_fund.features.ai.chat.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatAction;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.model.AdvisorAssessmentResult;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.AgentContextBundle;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.AgentResponse;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.model.MarketAssessmentResult;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.model.RiskAssessmentResult;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ToolDetailLevel;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRequest;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowResponse;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.WorkflowRoute;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptId;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class FinancialAdvisorAgent {
 
-    private static final String SYSTEM_PROMPT = """
-            You are FinancialAdvisorAgent for a mutual fund portfolio copilot.
-            Return ONLY valid JSON:
-            {"summary":"...","warnings":["..."],"confidence":0.0}
-            Rules:
-            - Advisory only. Do not imply execution.
-            - Reference only the supplied context, risk analysis, and market analysis.
-            - Mention uncertainty briefly when context is stale or incomplete.
-            """;
-
     private final LangChain4jWorkflowEngine workflowEngine;
     private final ObjectMapper objectMapper;
+        private final PromptRegistry promptRegistry;
 
     public AgentResponse advise(
             AgentContextBundle context,
             WorkflowRoute route,
-            JsonNode riskAssessment,
-            JsonNode marketAssessment) {
+            RiskAssessmentResult riskAssessment,
+            MarketAssessmentResult marketAssessment,
+            UUID conversationId) {
         try {
-            ObjectNode prompt = objectMapper.createObjectNode();
-            prompt.set("context", objectMapper.valueToTree(context));
-            prompt.set("riskAssessment", riskAssessment);
-            prompt.set("marketAssessment", marketAssessment);
-
-            LangChain4jWorkflowEngine.Response response = workflowEngine.generate(
-                    SYSTEM_PROMPT,
-                    objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(prompt));
-            JsonNode node = objectMapper.readTree(stripCodeFence(response.content()));
+            WorkflowResponse<AdvisorAssessmentResult> response = workflowEngine.generate(WorkflowRequest.<AdvisorAssessmentResult>builder()
+                    .conversationId(conversationId)
+                    .executionUserId(context.getUserId())
+                    .scope("financial-advisor")
+                    .route(route)
+                    .detailLevel(ToolDetailLevel.ANALYST)
+                    .userQuestion(context.getUserMessage())
+                    .seedContext(seedContext(route, context, riskAssessment, marketAssessment))
+                    .systemPrompt(promptRegistry.text(PromptId.FINANCIAL_ADVISOR_SYSTEM))
+                    .outputType(AdvisorAssessmentResult.class)
+                    .selectedTools(ToolSelectionCatalog.FINANCIAL_ADVISOR)
+                    .build());
+            AdvisorAssessmentResult node = response.getContent();
             List<String> warnings = new ArrayList<>(context.getWarnings());
-            warnings.addAll(readArray(node.path("warnings")));
+            warnings.addAll(node.getWarnings() == null ? List.of() : node.getWarnings());
             return AgentResponse.builder()
-                    .summary(node.path("summary").asText(fallbackSummary(route)))
+                    .summary(node.getSummary() == null || node.getSummary().isBlank() ? fallbackSummary(route) : node.getSummary())
                     .warnings(warnings.stream().distinct().limit(8).toList())
                     .actions(defaultActions(route))
-                    .confidence(node.path("confidence").asDouble(0.67))
+                    .confidence(node.getConfidence() <= 0 ? 0.67 : node.getConfidence())
                     .workflowRoute(route)
                     .toolCalls(List.of("risk_assessor", "market_analyst", "financial_advisor", "critic"))
-                    .modelProfileUsed(response.modelProfileUsed())
+                    .modelProfileUsed(response.getModelProfileUsed())
                     .requiresConfirmation(route == WorkflowRoute.LC4J_REBALANCE_CRITIQUE)
                     .build();
         } catch (Exception ex) {
@@ -73,6 +77,32 @@ public class FinancialAdvisorAgent {
                     .requiresConfirmation(route == WorkflowRoute.LC4J_REBALANCE_CRITIQUE)
                     .build();
         }
+    }
+
+    private Map<String, Object> seedContext(
+            WorkflowRoute route,
+            AgentContextBundle context,
+            RiskAssessmentResult riskAssessment,
+            MarketAssessmentResult marketAssessment) {
+        Map<String, Object> seed = new LinkedHashMap<>();
+        seed.put("route", route == null ? "UNKNOWN" : route.name());
+        seed.put("screenContext", context.getScreenContext() == null ? "LANDING" : context.getScreenContext());
+        seed.put("objectiveHint", "Provide advisory-only recommendation with suitability-first framing.");
+        seed.put("candidateFundIds", context.getHoldingsSummary() == null
+                ? List.of()
+                : context.getHoldingsSummary().valueStream()
+                        .map(node -> node.path("fundId").asText(""))
+                        .filter(value -> !value.isBlank())
+                        .limit(4)
+                        .toList());
+
+        Map<String, Object> priorAssessments = new LinkedHashMap<>();
+        priorAssessments.put("riskSummary", riskAssessment == null ? "" : riskAssessment.getSummary());
+        priorAssessments.put("riskShift", riskAssessment == null ? "STABLE" : riskAssessment.getRiskShift());
+        priorAssessments.put("marketFreshness", marketAssessment == null ? "UNKNOWN" : marketAssessment.getFreshnessStatus());
+        priorAssessments.put("marketWarnings", marketAssessment == null ? List.of() : marketAssessment.getMarketWarnings());
+        seed.put("priorAssessments", priorAssessments);
+        return seed;
     }
 
     private List<ChatAction> defaultActions(WorkflowRoute route) {
@@ -101,19 +131,6 @@ public class FinancialAdvisorAgent {
                 .build();
     }
 
-    private List<String> readArray(JsonNode node) {
-        if (!(node instanceof ArrayNode arrayNode)) {
-            return List.of();
-        }
-        List<String> values = new ArrayList<>();
-        arrayNode.forEach(item -> {
-            if (item.isTextual()) {
-                values.add(item.asText());
-            }
-        });
-        return values;
-    }
-
     private String fallbackSummary(WorkflowRoute route) {
         return switch (route) {
             case LC4J_SCENARIO_ANALYSIS ->
@@ -126,10 +143,4 @@ public class FinancialAdvisorAgent {
         };
     }
 
-    private String stripCodeFence(String content) {
-        if (content == null) {
-            return "{}";
-        }
-        return content.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "");
-    }
 }

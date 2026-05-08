@@ -1,0 +1,44 @@
+[
+  {
+    "message": "What if I move 10% to debt?",
+    "screenContext": "LANDING",
+    "expectedIntent": "SCENARIO_ANALYSIS",
+    "expectedRoute": "LC4J_SCENARIO_ANALYSIS"
+  },
+  {
+    "message": "Can you critique this rebalance and tell me the trade-off?",
+    "screenContext": "MANUAL_SELECTION_RESULT",
+    "expectedIntent": "REBALANCE_DRAFT",
+    "expectedRoute": "LC4J_REBALANCE_CRITIQUE"
+  },
+  {
+    "message": "Which of these two funds is better for my profile?",
+    "screenContext": "LANDING",
+    "expectedIntent": "FUND_COMPARE",
+    "expectedRoute": "LC4J_RECOMMENDATION_SYNTHESIS"
+  },
+  {
+    "message": "Explain my risk profile and why this allocation fits me",
+    "screenContext": "RISK_PROFILE_RESULT",
+    "expectedIntent": "RISK_PROFILE_EXPLAINER",
+    "expectedRoute": "SPRING_STANDARD_CHAT"
+  },
+  {
+    "message": "What data is stale or missing in my portfolio?",
+    "screenContext": "MANUAL_SELECTION_RESULT",
+    "expectedIntent": "DATA_QUALITY",
+    "expectedRoute": "SPRING_STANDARD_CHAT"
+  },
+  {
+    "message": "Show my portfolio summary and top issue",
+    "screenContext": "LANDING",
+    "expectedIntent": "PORTFOLIO_SUMMARY",
+    "expectedRoute": "SPRING_STANDARD_CHAT"
+  },
+  {
+    "message": "How did the fund perform over 3 years?",
+    "screenContext": "LANDING",
+    "expectedIntent": "FUND_PERFORMANCE",
+    "expectedRoute": "SPRING_STANDARD_CHAT"
+  }
+]

@@ -2,6 +2,7 @@ package com.mutualfunds.api.mutual_fund.features.ai.api;
 
 import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatMessageRequest;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatStreamEvent;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.service.ChatAuditService;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.service.PortfolioAgentService;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.service.StarterPromptService;
 import com.mutualfunds.api.mutual_fund.shared.security.UserPrincipal;
@@ -34,6 +35,9 @@ class ChatControllerTest {
 
     @Mock
     private StarterPromptService starterPromptService;
+
+    @Mock
+    private ChatAuditService chatAuditService;
 
     @InjectMocks
     private ChatController chatController;

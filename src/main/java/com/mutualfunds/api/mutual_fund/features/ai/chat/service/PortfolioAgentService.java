@@ -205,7 +205,19 @@ public class PortfolioAgentService {
                 .entityId(contextBundle.getUserId().toString()).build());
 
         try {
-            return CompletableFuture.supplyAsync(() -> advancedWorkflowDirector.execute(route, contextBundle))
+            UUID contextUserId = contextBundle.getUserId();
+            return CompletableFuture.supplyAsync(() -> {
+                        if (contextUserId != null) {
+                            ToolExecutionContextHolder.setUserId(contextUserId);
+                        } else {
+                            ToolExecutionContextHolder.clear();
+                        }
+                        try {
+                            return advancedWorkflowDirector.execute(route, contextBundle, conversationId);
+                        } finally {
+                            ToolExecutionContextHolder.clear();
+                        }
+                    })
                     .orTimeout(properties.getTotalAdvancedFlowTimeoutMs(), TimeUnit.MILLISECONDS)
                     .exceptionally(ex -> {
                         log.warn("Advanced workflow timed out or failed: {}", ex.getMessage());

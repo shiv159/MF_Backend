@@ -3,6 +3,8 @@ package com.mutualfunds.api.mutual_fund.features.ai.chat.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ChatIntent;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptId;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -18,24 +20,13 @@ import java.util.UUID;
 @Slf4j
 public class ChatSynthesisService {
 
-    private static final String SYNTHESIS_PROMPT = """
-            You are a grounded mutual fund portfolio assistant.
-            Return ONLY valid JSON using this exact structure:
-            {"response":"short grounded answer"}
-
-            Rules:
-            - Keep the response under 170 words.
-            - Use only the provided tool results and conversation context.
-            - If data is missing or stale, mention that briefly.
-            - Be direct, useful, and non-promotional.
-            - Do not include markdown code fences.
-            """;
-
     private final ObjectMapper objectMapper;
     private final ChatClient chatClient;
+    private final PromptRegistry promptRegistry;
 
-    public ChatSynthesisService(ChatClient.Builder builder, ObjectMapper objectMapper) {
+    public ChatSynthesisService(ChatClient.Builder builder, ObjectMapper objectMapper, PromptRegistry promptRegistry) {
         this.objectMapper = objectMapper;
+    this.promptRegistry = promptRegistry;
         this.chatClient = builder
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(MessageWindowChatMemory.builder()
                         .chatMemoryRepository(new InMemoryChatMemoryRepository())
@@ -51,7 +42,7 @@ public class ChatSynthesisService {
                     ? UUID.randomUUID().toString()
                     : conversationId;
             String response = chatClient.prompt()
-                    .system(SYNTHESIS_PROMPT)
+                    .system(promptRegistry.text(PromptId.CHAT_SYNTHESIS_SYSTEM))
                     .user(buildPrompt(intent, screenContext, userMessage, toolPayload, warnings))
                     .advisors(a -> a.param(ChatMemory.CONVERSATION_ID,
                             effectiveConversationId))
