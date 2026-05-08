@@ -19,6 +19,7 @@ import com.mutualfunds.api.mutual_fund.features.portfolio.diagnostics.dto.Portfo
 import com.mutualfunds.api.mutual_fund.features.portfolio.holdings.domain.UserHolding;
 import com.mutualfunds.api.mutual_fund.features.portfolio.quality.application.PortfolioDataQualityInspector;
 import com.mutualfunds.api.mutual_fund.features.risk.dto.RiskProfileResponse;
+import com.mutualfunds.api.mutual_fund.shared.observability.CorrelationIdHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -79,6 +80,7 @@ public class PortfolioAgentService {
         WorkflowEngineSelector.Selection selection = workflowEngineSelector.select(decision);
         UUID conversationId = resolveConversationId(request.getConversationId());
         UUID assistantMessageId = UUID.randomUUID();
+        String correlationId = CorrelationIdHolder.get();
 
         emit(emitter, sseResponseStreamer.event("status", conversationId, null,
                 sseResponseStreamer.objectNode("status",
@@ -87,6 +89,8 @@ public class PortfolioAgentService {
                 sseResponseStreamer.objectNode("status", "intent_resolved", "intent", decision.intent().name(),
                         "route", selection.workflowRoute().name(),
                         "engine", selection.engineType().name(),
+                        "correlationId", correlationId,
+                        "routingConfidence", decision.confidence(),
                         "confidence", decision.confidence())));
 
         List<UserHolding> holdings = portfolioToolFacade.findCurrentHoldings(userId);
@@ -152,12 +156,15 @@ public class PortfolioAgentService {
                         "actions", objectMapper.valueToTree(actions),
                         "requiresConfirmation", requiresConfirmation,
                         "workflowRoute", selection.workflowRoute().name(),
+                        "correlationId", correlationId,
+                        "routingConfidence", responseConfidence,
                         "confidence", responseConfidence,
                         "toolCalls", objectMapper.valueToTree(toolCalls),
                         "modelProfileUsed", modelProfileUsed,
                         "fallbackUsed", fallbackUsed)));
 
-        log.info("chat_turn intent={} route={} engine={} modelProfileUsed={} confidence={} toolCalls={} fallbackUsed={} latencyMs={}",
+        log.info("chat_turn correlationId={} intent={} route={} engine={} modelProfileUsed={} confidence={} toolCalls={} fallbackUsed={} latencyMs={}",
+                correlationId,
                 decision.intent(),
                 selection.workflowRoute(),
                 selection.engineType(),

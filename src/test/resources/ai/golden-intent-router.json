@@ -6,16 +6,46 @@
     "expectedRoute": "LC4J_SCENARIO_ANALYSIS"
   },
   {
+    "message": "Simulate a more conservative allocation shift",
+    "screenContext": "LANDING",
+    "expectedIntent": "SCENARIO_ANALYSIS",
+    "expectedRoute": "LC4J_SCENARIO_ANALYSIS"
+  },
+  {
     "message": "Can you critique this rebalance and tell me the trade-off?",
     "screenContext": "MANUAL_SELECTION_RESULT",
     "expectedIntent": "REBALANCE_DRAFT",
     "expectedRoute": "LC4J_REBALANCE_CRITIQUE"
   },
   {
+    "message": "Draft a rebalance plan to reduce risk",
+    "screenContext": "MANUAL_SELECTION_RESULT",
+    "expectedIntent": "REBALANCE_DRAFT",
+    "expectedRoute": "SPRING_STANDARD_CHAT"
+  },
+  {
     "message": "Which of these two funds is better for my profile?",
     "screenContext": "LANDING",
     "expectedIntent": "FUND_COMPARE",
     "expectedRoute": "LC4J_RECOMMENDATION_SYNTHESIS"
+  },
+  {
+    "message": "Compare HDFC Mid Cap Fund vs ICICI Bluechip Fund",
+    "screenContext": "LANDING",
+    "expectedIntent": "FUND_COMPARE",
+    "expectedRoute": "SPRING_STANDARD_CHAT"
+  },
+  {
+    "message": "How risky is this fund based on beta and volatility?",
+    "screenContext": "LANDING",
+    "expectedIntent": "FUND_RISK",
+    "expectedRoute": "SPRING_STANDARD_CHAT"
+  },
+  {
+    "message": "How did the fund perform over 3 years?",
+    "screenContext": "LANDING",
+    "expectedIntent": "FUND_PERFORMANCE",
+    "expectedRoute": "SPRING_STANDARD_CHAT"
   },
   {
     "message": "Explain my risk profile and why this allocation fits me",
@@ -36,9 +66,33 @@
     "expectedRoute": "SPRING_STANDARD_CHAT"
   },
   {
-    "message": "How did the fund perform over 3 years?",
+    "message": "What is wrong with my portfolio overlap?",
+    "screenContext": "MANUAL_SELECTION_RESULT",
+    "expectedIntent": "DIAGNOSTIC_EXPLAINER",
+    "expectedRoute": "SPRING_STANDARD_CHAT"
+  },
+  {
+    "message": "Which should I pick for my profile between these funds?",
     "screenContext": "LANDING",
-    "expectedIntent": "FUND_PERFORMANCE",
+    "expectedIntent": "FUND_COMPARE",
+    "expectedRoute": "LC4J_RECOMMENDATION_SYNTHESIS"
+  },
+  {
+    "message": "Review this rebalance draft",
+    "screenContext": "MANUAL_SELECTION_RESULT",
+    "expectedIntent": "REBALANCE_DRAFT",
+    "expectedRoute": "LC4J_REBALANCE_CRITIQUE"
+  },
+  {
+    "message": "How can I improve my portfolio?",
+    "screenContext": "MANUAL_SELECTION_RESULT",
+    "expectedIntent": "DIAGNOSTIC_EXPLAINER",
+    "expectedRoute": "SPRING_STANDARD_CHAT"
+  },
+  {
+    "message": "I need a general explanation of expense ratio",
+    "screenContext": "LANDING",
+    "expectedIntent": "GENERAL_QA",
     "expectedRoute": "SPRING_STANDARD_CHAT"
   }
 ]

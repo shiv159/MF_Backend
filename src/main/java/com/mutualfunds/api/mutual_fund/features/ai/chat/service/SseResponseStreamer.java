@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatStreamEvent;
+import com.mutualfunds.api.mutual_fund.shared.observability.CorrelationIdHolder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +24,7 @@ public class SseResponseStreamer {
                 .type(type)
                 .conversationId(conversationId == null ? null : conversationId.toString())
                 .assistantMessageId(assistantMessageId == null ? null : assistantMessageId.toString())
+                .correlationId(CorrelationIdHolder.get())
                 .payload(payload)
                 .generatedAt(LocalDateTime.now())
                 .build();
@@ -47,6 +49,7 @@ public class SseResponseStreamer {
                     .type("message_delta")
                     .conversationId(conversationId.toString())
                     .assistantMessageId(assistantMessageId.toString())
+                    .correlationId(CorrelationIdHolder.get())
                     .contentDelta(chunk)
                     .generatedAt(LocalDateTime.now())
                     .build());

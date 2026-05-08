@@ -13,6 +13,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -40,28 +41,18 @@ public class AiService {
     }
 
 
-    /**
-     * Generate AI-powered diagnostic insights: summary, suggestion messages, and
-     * strengths.
-     * Returns raw JSON string to be parsed by the caller.
-     *
-     * @param diagnosticContext Text representation of portfolio metrics and
-     *                          detected issues
-     * @return JSON string with summary, suggestionMessages, and strengths; or empty
-     *         string on failure
-     */
-    public String generateDiagnosticInsights(String diagnosticContext) {
+    public Optional<DiagnosticInsightsPayload> generateDiagnosticInsights(String diagnosticContext) {
         try {
             log.info("Generating AI diagnostic insights");
-            String response = this.diagnosticClient.prompt()
+            DiagnosticInsightsPayload response = this.diagnosticClient.prompt()
                     .system(promptRegistry.text(PromptId.AI_DIAGNOSTIC_SYSTEM))
                     .user(diagnosticContext)
                     .call()
-                    .content();
-            return response != null ? response.trim() : "";
+                    .entity(DiagnosticInsightsPayload.class);
+            return DiagnosticInsightsValidator.validate(response);
         } catch (Exception e) {
             log.error("Failed to generate AI diagnostic insights: {}", e.getMessage());
-            return ""; // Fallback: caller will use template messages
+            return Optional.empty();
         }
     }
 

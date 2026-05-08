@@ -1,6 +1,7 @@
 package com.mutualfunds.api.mutual_fund.features.ai.chat.service;
 
 import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatMessageRequest;
+import com.mutualfunds.api.mutual_fund.shared.observability.CorrelationIdHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,7 +17,8 @@ public class ChatAuditService {
         if (request == null) {
             return;
         }
-        log.info("chat_audit userId={} conversationId={} screenContext={} messageLength={}",
+        log.info("chat_audit correlationId={} userId={} conversationId={} screenContext={} messageLength={}",
+                CorrelationIdHolder.get(),
                 userId,
                 request.getConversationId(),
                 request.getScreenContext(),

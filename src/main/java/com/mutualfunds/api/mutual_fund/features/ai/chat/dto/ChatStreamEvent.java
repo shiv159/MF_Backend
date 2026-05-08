@@ -16,6 +16,7 @@ public class ChatStreamEvent {
     private String type;
     private String conversationId;
     private String assistantMessageId;
+    private String correlationId;
     private String contentDelta;
     private JsonNode payload;
     private LocalDateTime generatedAt;

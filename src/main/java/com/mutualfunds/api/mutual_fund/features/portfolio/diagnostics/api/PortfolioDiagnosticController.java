@@ -1,8 +1,7 @@
 package com.mutualfunds.api.mutual_fund.features.portfolio.diagnostics.api;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mutualfunds.api.mutual_fund.features.ai.application.AiService;
+import com.mutualfunds.api.mutual_fund.features.ai.application.DiagnosticInsightsPayload;
 import com.mutualfunds.api.mutual_fund.features.portfolio.diagnostics.dto.PortfolioDiagnosticDTO;
 import com.mutualfunds.api.mutual_fund.features.portfolio.diagnostics.dto.PortfolioDiagnosticDTO.DiagnosticSuggestion;
 import com.mutualfunds.api.mutual_fund.shared.security.UserPrincipal;
@@ -16,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -31,7 +32,6 @@ public class PortfolioDiagnosticController {
 
     private final PortfolioDiagnosticService diagnosticService;
     private final AiService aiService;
-    private final ObjectMapper objectMapper;
 
     /**
      * GET /api/v1/portfolio/diagnostic
@@ -76,46 +76,33 @@ public class PortfolioDiagnosticController {
     private void enrichWithAI(PortfolioDiagnosticDTO diagnostic) {
         try {
             String context = diagnosticService.buildDiagnosticContextForAI(diagnostic);
-            String aiResponse = aiService.generateDiagnosticInsights(context);
-
-            if (aiResponse == null || aiResponse.isBlank()) {
+            Optional<DiagnosticInsightsPayload> payload = aiService.generateDiagnosticInsights(context);
+            if (payload.isEmpty()) {
                 log.warn("AI returned empty response, keeping template messages");
                 return;
             }
 
-            // Strip markdown code fences if present
-            String jsonStr = aiResponse;
-            if (jsonStr.startsWith("```")) {
-                jsonStr = jsonStr.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "");
+            DiagnosticInsightsPayload insight = payload.get();
+            if (insight.summary() != null && !insight.summary().isBlank()) {
+                diagnostic.setSummary(insight.summary());
             }
 
-            JsonNode root = objectMapper.readTree(jsonStr);
-
-            // Replace summary
-            if (root.has("summary") && !root.get("summary").asText().isBlank()) {
-                diagnostic.setSummary(root.get("summary").asText());
-            }
-
-            // Merge suggestion messages
-            if (root.has("suggestionMessages") && root.get("suggestionMessages").isObject()) {
-                JsonNode messages = root.get("suggestionMessages");
+            Map<String, String> suggestionMessages = insight.suggestionMessages() == null
+                    ? Map.of()
+                    : insight.suggestionMessages();
+            if (!suggestionMessages.isEmpty()) {
                 for (DiagnosticSuggestion suggestion : diagnostic.getSuggestions()) {
-                    String categoryKey = suggestion.getCategory().name();
-                    if (messages.has(categoryKey) && !messages.get(categoryKey).asText().isBlank()) {
-                        suggestion.setMessage(messages.get(categoryKey).asText());
+                    String value = suggestionMessages.get(suggestion.getCategory().name());
+                    if (value != null && !value.isBlank()) {
+                        suggestion.setMessage(value);
                     }
                 }
             }
 
-            // Replace strengths
-            if (root.has("strengths") && root.get("strengths").isArray()) {
-                List<String> aiStrengths = new ArrayList<>();
-                for (JsonNode node : root.get("strengths")) {
-                    String text = node.asText();
-                    if (text != null && !text.isBlank()) {
-                        aiStrengths.add(text);
-                    }
-                }
+            if (insight.strengths() != null) {
+                List<String> aiStrengths = new ArrayList<>(insight.strengths().stream()
+                        .filter(value -> value != null && !value.isBlank())
+                        .toList());
                 if (!aiStrengths.isEmpty()) {
                     diagnostic.setStrengths(aiStrengths);
                 }

@@ -51,6 +51,7 @@ public class LangChain4jWorkflowEngine {
     private final AiWorkflowProperties properties;
     private final ObjectMapper objectMapper;
     private final LangChain4jConversationMemory memory;
+    private final LangChain4jToolExecutionGuard toolExecutionGuard;
 
     private final PortfolioStateTools portfolioStateTools;
     private final FundDataTools fundDataTools;
@@ -121,6 +122,7 @@ public class LangChain4jWorkflowEngine {
 
             List<ChatMessage> turnMessages = new ArrayList<>(inputMessages);
             List<String> executedTools = new ArrayList<>();
+            LangChain4jToolExecutionGuard.TurnBudget turnBudget = toolExecutionGuard.startTurn();
             TokenUsage totalUsage = null;
 
             for (int iteration = 0; iteration < properties.getMaxToolLoopIterations(); iteration++) {
@@ -140,7 +142,10 @@ public class LangChain4jWorkflowEngine {
                             request.getRoute(),
                             request.getScope(),
                             aiMessage.toolExecutionRequests().stream().map(ToolExecutionRequest::name).toList());
-                    List<ToolExecutionResultMessage> toolResults = executeToolRequests(aiMessage.toolExecutionRequests(), executedTools);
+                    List<ToolExecutionResultMessage> toolResults = executeToolRequests(
+                            aiMessage.toolExecutionRequests(),
+                            executedTools,
+                            turnBudget);
                     conversation.addAll(toolResults);
                     turnMessages.addAll(toolResults);
                     log.info("lc4j_tool_result_appended route={} scope={} appendedCount={}",
@@ -225,21 +230,21 @@ public class LangChain4jWorkflowEngine {
         }
     }
 
-    private List<ToolExecutionResultMessage> executeToolRequests(List<ToolExecutionRequest> requests, List<String> executedTools) {
+    private List<ToolExecutionResultMessage> executeToolRequests(
+            List<ToolExecutionRequest> requests,
+            List<String> executedTools,
+            LangChain4jToolExecutionGuard.TurnBudget turnBudget) {
         List<ToolExecutionResultMessage> results = new ArrayList<>();
         for (ToolExecutionRequest request : requests) {
-            executedTools.add(request.name());
+            LangChain4jToolExecutionGuard.GuardDecision decision = toolExecutionGuard.evaluate(turnBudget, request.name());
             String response;
-            try {
-                response = executeToolRequest(request);
+            if (!decision.allowed()) {
+                log.info("lc4j_tool_skipped toolName={} code={} reason={}", request.name(), decision.code(), decision.message());
+                response = toolExecutionGuard.rejectedPayload(request.name(), decision);
+            } else {
+                executedTools.add(request.name());
+                response = toolExecutionGuard.executeWithBudget(request.name(), () -> executeToolRequest(request));
                 log.info("lc4j_tool_executed toolName={} status=OK", request.name());
-            } catch (Exception ex) {
-                log.warn("lc4j_tool_executed toolName={} status=ERROR message={}", request.name(), ex.getMessage());
-                response = objectMapper.createObjectNode()
-                        .put("status", "ERROR")
-                        .put("toolName", request.name())
-                        .put("message", ex.getMessage() == null ? "Tool execution failed" : ex.getMessage())
-                        .toString();
             }
             results.add(ToolExecutionResultMessage.from(request, response));
         }

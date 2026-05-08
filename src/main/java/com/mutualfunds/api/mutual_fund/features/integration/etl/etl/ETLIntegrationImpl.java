@@ -2,12 +2,16 @@ package com.mutualfunds.api.mutual_fund.features.integration.etl.etl;
 
 import com.mutualfunds.api.mutual_fund.features.integration.etl.dto.EnrichmentRequest;
 import com.mutualfunds.api.mutual_fund.features.integration.etl.dto.EnrichmentResponse;
+import com.mutualfunds.api.mutual_fund.shared.observability.CorrelationIdHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+
+import java.time.Duration;
+import java.util.UUID;
 
 /**
  * ETL service integration component
@@ -28,6 +32,9 @@ public class ETLIntegrationImpl implements IETLIntegration {
     @Value("${etl.enrich.endpoint:/etl/enrich}")
     private String enrichEndpoint;
 
+    @Value("${etl.service.timeout:30000}")
+    private long etlServiceTimeoutMs;
+
     /**
      * Send parsed holdings to Python ETL for enrichment (async/reactive)
      * Spring Boot already parsed the PDF/Excel
@@ -40,13 +47,17 @@ public class ETLIntegrationImpl implements IETLIntegration {
     @Override
     public Mono<EnrichmentResponse> enrichHoldingsAsync(EnrichmentRequest request) {
         String url = etlServiceUrl + enrichEndpoint;
-        log.info("Calling Python ETL service for enrichment (async): {} with {} holdings",
-                url, request.getParsedHoldings().size());
-        
+        String correlationId = CorrelationIdHolder.get();
+        if (correlationId == null || correlationId.isBlank()) {
+            correlationId = UUID.randomUUID().toString();
+        }
+        log.info("Calling Python ETL service for enrichment (async): {} with {} holdings correlationId={}",
+                url, request.getParsedHoldings().size(), correlationId);
 
         return webClient
                 .post()
                 .uri(url)
+                .header(CorrelationIdHolder.HEADER_NAME, correlationId)
                 .bodyValue(request)
                 .exchangeToMono(response -> {
                     if (response.statusCode().is2xxSuccessful()) {
@@ -88,7 +99,8 @@ public class ETLIntegrationImpl implements IETLIntegration {
                                         .errorMessage("ETL error (" + response.statusCode() + "): " + e.getMessage())
                                         .build()));
                     }
-                });
+                })
+                .timeout(Duration.ofMillis(etlServiceTimeoutMs));
     }
 
     /**

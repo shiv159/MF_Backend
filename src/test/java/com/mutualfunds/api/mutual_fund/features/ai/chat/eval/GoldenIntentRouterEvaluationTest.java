@@ -22,18 +22,25 @@ class GoldenIntentRouterEvaluationTest {
         IntentRouterService routerService = new IntentRouterService();
 
         List<GoldenCase> cases = loadDataset(objectMapper);
+        assertThat(cases.size()).isGreaterThanOrEqualTo(12);
         List<String> failures = new ArrayList<>();
+        int matched = 0;
 
         for (GoldenCase entry : cases) {
             IntentDecision decision = routerService.resolveDecision(entry.message(), entry.screenContext());
-            if (!entry.expectedIntent().equals(decision.intent().name())
-                    || !entry.expectedRoute().equals(decision.route().name())) {
+            boolean correct = entry.expectedIntent().equals(decision.intent().name())
+                    && entry.expectedRoute().equals(decision.route().name());
+            if (!correct) {
                 failures.add("message='" + entry.message() + "' expected intent=" + entry.expectedIntent()
                         + " route=" + entry.expectedRoute() + " got intent=" + decision.intent()
                         + " route=" + decision.route());
+                continue;
             }
+            matched++;
         }
 
+        double accuracy = (double) matched / (double) cases.size();
+        assertThat(accuracy).isGreaterThanOrEqualTo(0.9);
         assertThat(failures).isEmpty();
     }
 

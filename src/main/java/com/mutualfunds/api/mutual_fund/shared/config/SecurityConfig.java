@@ -3,6 +3,7 @@ package com.mutualfunds.api.mutual_fund.shared.config;
 import com.mutualfunds.api.mutual_fund.shared.security.ApiRateLimitingFilter;
 import com.mutualfunds.api.mutual_fund.shared.security.JWTAuthenticationFilter;
 import com.mutualfunds.api.mutual_fund.shared.security.oauth2.OAuth2LoginSuccessHandler;
+import com.mutualfunds.api.mutual_fund.shared.observability.CorrelationIdFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,6 +31,7 @@ public class SecurityConfig {
     private final ApiRateLimitingFilter apiRateLimitingFilter;
     private final JWTAuthenticationFilter jwtAuthenticationFilter;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+    private final CorrelationIdFilter correlationIdFilter;
 
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -54,6 +56,7 @@ public class SecurityConfig {
                 .exceptionHandling(e -> e
                         .defaultAuthenticationEntryPointFor(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                                 new AntPathRequestMatcher("/api/**")))
+                .addFilterBefore(correlationIdFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(apiRateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
