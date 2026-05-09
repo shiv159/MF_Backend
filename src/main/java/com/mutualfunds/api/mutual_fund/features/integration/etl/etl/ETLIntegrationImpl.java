@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.util.UUID;
 
 /**
@@ -99,8 +98,7 @@ public class ETLIntegrationImpl implements IETLIntegration {
                                         .errorMessage("ETL error (" + response.statusCode() + "): " + e.getMessage())
                                         .build()));
                     }
-                })
-                .timeout(Duration.ofMillis(etlServiceTimeoutMs));
+                });
     }
 
     /**
