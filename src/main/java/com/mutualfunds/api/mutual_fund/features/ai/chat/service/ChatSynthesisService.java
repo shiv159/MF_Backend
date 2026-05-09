@@ -2,6 +2,9 @@ package com.mutualfunds.api.mutual_fund.features.ai.chat.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mutualfunds.api.mutual_fund.features.ai.application.AiSafetyService;
+import com.mutualfunds.api.mutual_fund.features.ai.application.StructuredOutputSupport;
+import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatSynthesisPayload;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ChatIntent;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptId;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptRegistry;
@@ -23,10 +26,18 @@ public class ChatSynthesisService {
     private final ObjectMapper objectMapper;
     private final ChatClient chatClient;
     private final PromptRegistry promptRegistry;
+    private final StructuredOutputSupport structuredOutputSupport;
+    private final AiSafetyService aiSafetyService;
 
-    public ChatSynthesisService(ChatClient.Builder builder, ObjectMapper objectMapper, PromptRegistry promptRegistry) {
+    public ChatSynthesisService(ChatClient.Builder builder,
+            ObjectMapper objectMapper,
+            PromptRegistry promptRegistry,
+            StructuredOutputSupport structuredOutputSupport,
+            AiSafetyService aiSafetyService) {
         this.objectMapper = objectMapper;
-    this.promptRegistry = promptRegistry;
+        this.promptRegistry = promptRegistry;
+        this.structuredOutputSupport = structuredOutputSupport;
+        this.aiSafetyService = aiSafetyService;
         this.chatClient = builder
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(MessageWindowChatMemory.builder()
                         .chatMemoryRepository(new InMemoryChatMemoryRepository())
@@ -41,28 +52,40 @@ public class ChatSynthesisService {
             String effectiveConversationId = conversationId == null || conversationId.isBlank()
                     ? UUID.randomUUID().toString()
                     : conversationId;
-            String response = chatClient.prompt()
-                    .system(promptRegistry.text(PromptId.CHAT_SYNTHESIS_SYSTEM))
-                    .user(buildPrompt(intent, screenContext, userMessage, toolPayload, warnings))
-                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID,
-                            effectiveConversationId))
-                    .call()
-                    .content();
+            String prompt = buildPrompt(intent, screenContext, userMessage, toolPayload, warnings);
+            java.util.Optional<ChatSynthesisPayload> payload = structuredOutputSupport.generate(
+                    ChatSynthesisPayload.class,
+                    () -> chatClient.prompt()
+                            .system(promptRegistry.text(PromptId.CHAT_SYNTHESIS_SYSTEM))
+                            .user(prompt)
+                            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, effectiveConversationId))
+                            .call()
+                            .entity(ChatSynthesisPayload.class),
+                    () -> chatClient.prompt()
+                            .system(promptRegistry.text(PromptId.CHAT_SYNTHESIS_SYSTEM))
+                            .user(prompt)
+                            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, effectiveConversationId))
+                            .call()
+                            .content(),
+                    raw -> chatClient.prompt()
+                            .system("""
+                                    Repair the following response into valid JSON only.
+                                    Keep the exact schema: {"response":"short grounded answer"}
+                                    Do not add markdown or explanations.
+                                    """)
+                            .user(raw)
+                            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, effectiveConversationId))
+                            .call()
+                            .content(),
+                    this::validatePayload);
 
-            if (response == null || response.isBlank()) {
+            if (payload.isEmpty()) {
                 return new SynthesisResult(fallback(intent, toolPayload, warnings), true);
             }
-
-            String normalized = stripCodeFences(response);
-            JsonNode node = objectMapper.readTree(normalized);
-            String content = node.path("response").asText("").trim();
-            if (content.isBlank()) {
-                return new SynthesisResult(fallback(intent, toolPayload, warnings), true);
-            }
-            return new SynthesisResult(content, false);
+            return new SynthesisResult(aiSafetyService.enforceOutputPolicy(payload.orElseThrow().response()), false);
         } catch (Exception ex) {
             log.warn("Chat synthesis failed, using fallback: {}", ex.getMessage());
-            return new SynthesisResult(fallback(intent, toolPayload, warnings), true);
+            return new SynthesisResult(aiSafetyService.enforceOutputPolicy(fallback(intent, toolPayload, warnings)), true);
         }
     }
 
@@ -130,10 +153,12 @@ public class ChatSynthesisService {
         };
     }
 
-    private String stripCodeFences(String content) {
-        if (!content.startsWith("```")) {
-            return content;
+    private java.util.Optional<ChatSynthesisPayload> validatePayload(ChatSynthesisPayload payload) {
+        if (payload == null || payload.response() == null || payload.response().isBlank()) {
+            return java.util.Optional.empty();
         }
-        return content.replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "");
+        return java.util.Optional.of(ChatSynthesisPayload.builder()
+                .response(payload.response().trim())
+                .build());
     }
 }

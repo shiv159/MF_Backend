@@ -3,6 +3,7 @@ package com.mutualfunds.api.mutual_fund.features.ai.chat.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.mutualfunds.api.mutual_fund.features.ai.application.AiSafetyService;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.config.AiWorkflowProperties;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatAction;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.dto.ChatMessageRequest;
@@ -53,6 +54,7 @@ public class PortfolioAgentService {
     private final ObjectMapper objectMapper;
     private final PortfolioChatPayloadFactory payloadFactory;
     private final AiWorkflowProperties properties;
+    private final AiSafetyService aiSafetyService;
 
     public Flux<ChatStreamEvent> streamMessage(UUID userId, ChatMessageRequest request) {
         return Flux.<ChatStreamEvent>create(sink -> Schedulers.boundedElastic().schedule(() -> {
@@ -75,10 +77,35 @@ public class PortfolioAgentService {
         if (message.isBlank()) {
             throw new IllegalArgumentException("Message must not be blank");
         }
+        UUID conversationId = resolveConversationId(request.getConversationId());
+        AiSafetyService.InputSafetyAssessment inputAssessment = aiSafetyService.assessInput(message);
+        if (!inputAssessment.allowed()) {
+            emit(emitter, sseResponseStreamer.event("status", conversationId, null,
+                    sseResponseStreamer.objectNode("status", "policy_blocked", "reason", inputAssessment.reason())));
+            String safeResponse = aiSafetyService.enforceOutputPolicy(inputAssessment.safeResponse());
+            UUID assistantMessageId = UUID.randomUUID();
+            for (ChatStreamEvent streamEvent : sseResponseStreamer.streamContent(conversationId, assistantMessageId, safeResponse)) {
+                emit(emitter, streamEvent);
+            }
+            emit(emitter, sseResponseStreamer.event("message_complete", conversationId, assistantMessageId,
+                    sseResponseStreamer.objectNode(
+                            "intent", ChatIntent.GENERAL_QA.name(),
+                            "sources", objectMapper.createArrayNode(),
+                            "warnings", objectMapper.valueToTree(List.of(inputAssessment.reason())),
+                            "actions", objectMapper.createArrayNode(),
+                            "requiresConfirmation", false,
+                            "workflowRoute", WorkflowRoute.SPRING_FALLBACK_CHAT.name(),
+                            "correlationId", CorrelationIdHolder.get(),
+                            "routingConfidence", 1.0,
+                            "confidence", 1.0,
+                            "toolCalls", objectMapper.createArrayNode(),
+                            "modelProfileUsed", "policy-guard",
+                            "fallbackUsed", true)));
+            return;
+        }
 
         IntentDecision decision = intentRouterService.resolveDecision(message, request.getScreenContext());
         WorkflowEngineSelector.Selection selection = workflowEngineSelector.select(decision);
-        UUID conversationId = resolveConversationId(request.getConversationId());
         UUID assistantMessageId = UUID.randomUUID();
         String correlationId = CorrelationIdHolder.get();
 
@@ -140,6 +167,7 @@ public class PortfolioAgentService {
             responseText = synthesis.response();
             fallbackUsed = fallbackUsed || synthesis.fallbackUsed();
         }
+        responseText = aiSafetyService.enforceOutputPolicy(responseText);
 
         boolean requiresConfirmation = decision.requiresConfirmation()
                 || actions.stream().anyMatch(action -> "REBALANCE_DRAFT".equals(action.getType()));

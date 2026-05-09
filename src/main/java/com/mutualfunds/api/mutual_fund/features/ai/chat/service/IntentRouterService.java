@@ -1,5 +1,6 @@
 package com.mutualfunds.api.mutual_fund.features.ai.chat.service;
 
+import com.mutualfunds.api.mutual_fund.features.ai.application.StructuredOutputSupport;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.config.AiWorkflowProperties;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.ChatIntent;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.model.IntentDecision;
@@ -23,13 +24,16 @@ public class IntentRouterService {
     private final ChatClient chatClient;
     private final AiWorkflowProperties properties;
     private final PromptRegistry promptRegistry;
+    private final StructuredOutputSupport structuredOutputSupport;
 
     public IntentRouterService(ChatClient.Builder builder, AiWorkflowProperties properties,
-            PromptRegistry promptRegistry) {
+            PromptRegistry promptRegistry,
+            StructuredOutputSupport structuredOutputSupport) {
         this.chatClient = builder
                 .defaultAdvisors(new SimpleLoggerAdvisor()).build();
         this.properties = properties;
         this.promptRegistry = promptRegistry;
+        this.structuredOutputSupport = structuredOutputSupport;
     }
 
     public IntentRouterService() {
@@ -37,6 +41,7 @@ public class IntentRouterService {
         this.properties = AiWorkflowProperties.defaults();
         this.properties.setClassifierEnabled(false);
         this.promptRegistry = new PromptRegistry();
+        this.structuredOutputSupport = null;
     }
 
     public ChatIntent resolveIntent(String message, String screenContext) {
@@ -50,16 +55,37 @@ public class IntentRouterService {
         }
 
         try {
-            IntentDecision aiDecision = chatClient.prompt()
-                .system(promptRegistry.text(PromptId.INTENT_CLASSIFIER))
-                    .user("""
-                            Screen context: %s
-                            User message: %s
-                            """.formatted(
-                            screenContext == null ? "LANDING" : screenContext,
-                            message == null ? "" : message))
-                    .call()
-                    .entity(IntentDecision.class);
+            String classifierPrompt = """
+                    Screen context: %s
+                    User message: %s
+                    """.formatted(
+                    screenContext == null ? "LANDING" : screenContext,
+                    message == null ? "" : message);
+
+            IntentDecision aiDecision = structuredOutputSupport.generate(
+                    IntentDecision.class,
+                    () -> chatClient.prompt()
+                            .system(promptRegistry.text(PromptId.INTENT_CLASSIFIER))
+                            .user(classifierPrompt)
+                            .call()
+                            .entity(IntentDecision.class),
+                    () -> chatClient.prompt()
+                            .system(promptRegistry.text(PromptId.INTENT_CLASSIFIER))
+                            .user(classifierPrompt)
+                            .call()
+                            .content(),
+                    raw -> chatClient.prompt()
+                            .system("""
+                                    Repair the following response into valid JSON only.
+                                    Keep the exact schema:
+                                    {"intent":"...","toolGroup":"...","route":"...","confidence":0.0,"requiresConfirmation":false}
+                                    Do not add markdown or explanations.
+                                    """)
+                            .user(raw)
+                            .call()
+                            .content(),
+                    this::validateIntentDecision)
+                    .orElse(null);
 
             if (aiDecision == null || aiDecision.intent() == null || aiDecision.route() == null) {
                 return fallback;
@@ -264,6 +290,19 @@ public class IntentRouterService {
 
     private double clamp(double value) {
         return Math.max(0.0, Math.min(1.0, value));
+    }
+
+    private java.util.Optional<IntentDecision> validateIntentDecision(IntentDecision decision) {
+        if (decision == null || decision.intent() == null || decision.route() == null) {
+            return java.util.Optional.empty();
+        }
+        String toolGroup = decision.toolGroup() == null ? "" : decision.toolGroup().trim();
+        return java.util.Optional.of(new IntentDecision(
+                decision.intent(),
+                toolGroup,
+                decision.route(),
+                clamp(decision.confidence()),
+                decision.requiresConfirmation()));
     }
 
     private record IntentScore(ChatIntent intent, double score) {

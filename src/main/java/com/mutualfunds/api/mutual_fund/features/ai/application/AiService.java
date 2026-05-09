@@ -24,11 +24,17 @@ public class AiService {
     private final ChatClient diagnosticClient;
     private final PortfolioContextService portfolioContextService;
     private final PromptRegistry promptRegistry;
+    private final StructuredOutputSupport structuredOutputSupport;
+    private final AiSafetyService aiSafetyService;
 
     public AiService(ChatClient.Builder builder, PortfolioContextService portfolioContextService,
-            PromptRegistry promptRegistry) {
+            PromptRegistry promptRegistry,
+            StructuredOutputSupport structuredOutputSupport,
+            AiSafetyService aiSafetyService) {
         this.portfolioContextService = portfolioContextService;
         this.promptRegistry = promptRegistry;
+        this.structuredOutputSupport = structuredOutputSupport;
+        this.aiSafetyService = aiSafetyService;
         // Build raw clients without mutating the shared builder's system prompt
         this.chatClient = builder
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(MessageWindowChatMemory.builder()
@@ -44,12 +50,31 @@ public class AiService {
     public Optional<DiagnosticInsightsPayload> generateDiagnosticInsights(String diagnosticContext) {
         try {
             log.info("Generating AI diagnostic insights");
-            DiagnosticInsightsPayload response = this.diagnosticClient.prompt()
-                    .system(promptRegistry.text(PromptId.AI_DIAGNOSTIC_SYSTEM))
-                    .user(diagnosticContext)
-                    .call()
-                    .entity(DiagnosticInsightsPayload.class);
-            return DiagnosticInsightsValidator.validate(response);
+            Optional<DiagnosticInsightsPayload> response = structuredOutputSupport.generate(
+                    DiagnosticInsightsPayload.class,
+                    () -> this.diagnosticClient.prompt()
+                            .system(promptRegistry.text(PromptId.AI_DIAGNOSTIC_SYSTEM))
+                            .user(diagnosticContext)
+                            .call()
+                            .entity(DiagnosticInsightsPayload.class),
+                    () -> this.diagnosticClient.prompt()
+                            .system(promptRegistry.text(PromptId.AI_DIAGNOSTIC_SYSTEM))
+                            .user(diagnosticContext)
+                            .call()
+                            .content(),
+                    raw -> this.diagnosticClient.prompt()
+                            .system("""
+                                    Repair the following response into valid JSON only.
+                                    Keep the exact schema:
+                                    {"summary":"...","suggestionMessages":{"ISSUE_CATEGORY":"..."},"strengths":["..."]}
+                                    Do not add markdown or explanations.
+                                    """)
+                            .user(raw)
+                            .call()
+                            .content(),
+                    DiagnosticInsightsValidator::validate);
+            return response.map(aiSafetyService::sanitizeDiagnosticPayload)
+                    .flatMap(DiagnosticInsightsValidator::validate);
         } catch (Exception e) {
             log.error("Failed to generate AI diagnostic insights: {}", e.getMessage());
             return Optional.empty();
