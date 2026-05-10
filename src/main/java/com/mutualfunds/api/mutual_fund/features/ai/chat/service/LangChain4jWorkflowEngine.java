@@ -340,7 +340,7 @@ public class LangChain4jWorkflowEngine {
                 .apiKey(apiKey)
                 .modelName(profile)
                 .temperature(properties.getLangchain4j().getTemperature())
-                .timeout(Duration.ofSeconds(60))
+                .timeout(Duration.ofSeconds(180))
                 .logRequests(properties.getLangchain4j().isLogRequests())
                 .logResponses(properties.getLangchain4j().isLogResponses())
                 .build());
