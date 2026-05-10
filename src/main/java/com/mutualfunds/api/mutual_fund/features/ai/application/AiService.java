@@ -9,6 +9,7 @@ import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.stereotype.Service;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptId;
 import com.mutualfunds.api.mutual_fund.features.ai.chat.prompt.PromptRegistry;
+import com.mutualfunds.api.mutual_fund.shared.observability.LangfuseTraceService;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -26,15 +27,18 @@ public class AiService {
     private final PromptRegistry promptRegistry;
     private final StructuredOutputSupport structuredOutputSupport;
     private final AiSafetyService aiSafetyService;
+    private final LangfuseTraceService langfuseTraceService;
 
     public AiService(ChatClient.Builder builder, PortfolioContextService portfolioContextService,
             PromptRegistry promptRegistry,
             StructuredOutputSupport structuredOutputSupport,
-            AiSafetyService aiSafetyService) {
+            AiSafetyService aiSafetyService,
+            LangfuseTraceService langfuseTraceService) {
         this.portfolioContextService = portfolioContextService;
         this.promptRegistry = promptRegistry;
         this.structuredOutputSupport = structuredOutputSupport;
         this.aiSafetyService = aiSafetyService;
+        this.langfuseTraceService = langfuseTraceService;
         // Build raw clients without mutating the shared builder's system prompt
         this.chatClient = builder
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(MessageWindowChatMemory.builder()
@@ -99,13 +103,19 @@ public class AiService {
 
             log.info("Calling AI with enriched message for conversationId: {}", conversationId);
 
-            // Make the AI call
-            String fullResponse = this.chatClient.prompt()
-                    .system(promptRegistry.text(PromptId.AI_CHAT_SYSTEM))
-                    .user(enrichedMessage)
-                    .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
-                    .call()
-                    .content();
+            String fullResponse = langfuseTraceService.traceChatTurn(
+                    "ai-service-chat",
+                    userId,
+                    conversationId,
+                    "SPRING_STANDARD_CHAT",
+                    "spring-ai",
+                    message,
+                    () -> this.chatClient.prompt()
+                            .system(promptRegistry.text(PromptId.AI_CHAT_SYSTEM))
+                            .user(enrichedMessage)
+                            .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, conversationId))
+                            .call()
+                            .content());
 
             return fullResponse != null ? fullResponse : "I couldn't generate a response.";
         })

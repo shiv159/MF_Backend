@@ -21,6 +21,7 @@ import com.mutualfunds.api.mutual_fund.features.portfolio.holdings.domain.UserHo
 import com.mutualfunds.api.mutual_fund.features.portfolio.quality.application.PortfolioDataQualityInspector;
 import com.mutualfunds.api.mutual_fund.features.risk.dto.RiskProfileResponse;
 import com.mutualfunds.api.mutual_fund.shared.observability.CorrelationIdHolder;
+import com.mutualfunds.api.mutual_fund.shared.observability.LangfuseTraceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -55,6 +56,7 @@ public class PortfolioAgentService {
     private final PortfolioChatPayloadFactory payloadFactory;
     private final AiWorkflowProperties properties;
     private final AiSafetyService aiSafetyService;
+    private final LangfuseTraceService langfuseTraceService;
 
     public Flux<ChatStreamEvent> streamMessage(UUID userId, ChatMessageRequest request) {
         return Flux.<ChatStreamEvent>create(sink -> Schedulers.boundedElastic().schedule(() -> {
@@ -157,13 +159,21 @@ public class PortfolioAgentService {
         } else {
             runStandardTools(userId, decision.intent(), message, holdings, qualityResult, warnings, sources, actions, toolTrace,
                     conversationId, emitter);
-            ChatSynthesisService.SynthesisResult synthesis = springAiWorkflowEngine.synthesize(
-                    decision.intent(),
+            List<String> synthesisWarnings = warnings;
+            ChatSynthesisService.SynthesisResult synthesis = langfuseTraceService.traceChatTurn(
+                    "portfolio-copilot-spring-ai",
+                    userId,
                     conversationId.toString(),
-                    request.getScreenContext(),
+                    selection.workflowRoute().name(),
+                    selection.engineType().name(),
                     message,
-                    toolTrace,
-                    warnings);
+                    () -> springAiWorkflowEngine.synthesize(
+                            decision.intent(),
+                            conversationId.toString(),
+                            request.getScreenContext(),
+                            message,
+                            toolTrace,
+                            synthesisWarnings));
             responseText = synthesis.response();
             fallbackUsed = fallbackUsed || synthesis.fallbackUsed();
         }

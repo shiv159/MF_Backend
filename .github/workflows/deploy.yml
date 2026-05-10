@@ -103,6 +103,22 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.SERVICE_NAME }}:latest
 
+      - name: Build Langfuse OTEL environment
+        shell: bash
+        env:
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          LANGFUSE_BASE_URL: ${{ secrets.LANGFUSE_BASE_URL }}
+        run: |
+          BASIC_AUTH=$(printf "%s:%s" "$LANGFUSE_PUBLIC_KEY" "$LANGFUSE_SECRET_KEY" | base64 -w 0)
+          OTEL_HEADERS="Authorization=Basic ${BASIC_AUTH},x-langfuse-ingestion-version=4"
+
+          echo "::add-mask::$BASIC_AUTH"
+          echo "::add-mask::$OTEL_HEADERS"
+          echo "LANGFUSE_BASE_URL=$LANGFUSE_BASE_URL" >> "$GITHUB_ENV"
+          echo "OTEL_EXPORTER_OTLP_ENDPOINT=${LANGFUSE_BASE_URL}/api/public/otel" >> "$GITHUB_ENV"
+          echo "OTEL_EXPORTER_OTLP_HEADERS=$OTEL_HEADERS" >> "$GITHUB_ENV"
+
       # ============================================
       # Deploy to Cloud Run
       # ============================================
@@ -128,6 +144,10 @@ jobs:
             --set-env-vars "ETL_SERVICE_URL=${{ secrets.ETL_SERVICE_URL }}" \
             --set-env-vars "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" \
             --set-env-vars "JWT_SECRET=${{ secrets.JWT_SECRET }}" \
+            --set-env-vars "OTEL_TRACES_EXPORTER=otlp" \
+            --set-env-vars "LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL}" \
+            --set-env-vars "OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT}" \
+            --set-env-vars "^~^OTEL_EXPORTER_OTLP_HEADERS=${OTEL_EXPORTER_OTLP_HEADERS}" \
             --cpu-boost \
             --quiet
 
