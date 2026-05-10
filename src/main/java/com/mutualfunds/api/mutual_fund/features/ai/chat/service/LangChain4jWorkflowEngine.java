@@ -28,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import com.mutualfunds.api.mutual_fund.shared.observability.LangfuseTraceService;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -52,6 +53,7 @@ public class LangChain4jWorkflowEngine {
     private final ObjectMapper objectMapper;
     private final LangChain4jConversationMemory memory;
     private final LangChain4jToolExecutionGuard toolExecutionGuard;
+    private final LangfuseTraceService langfuseTraceService;
 
     private final PortfolioStateTools portfolioStateTools;
     private final FundDataTools fundDataTools;
@@ -81,7 +83,15 @@ public class LangChain4jWorkflowEngine {
         RuntimeException lastFailure = null;
         for (String modelProfile : candidates) {
             try {
-                return executeWithModel(request, modelProfile);
+                return langfuseTraceService.traceChatTurn(
+                        "lc4j_chat_turn",
+                        request.getExecutionUserId(),
+                        request.getConversationId() == null ? null : request.getConversationId().toString(),
+                        request.getRoute() == null ? null : request.getRoute().name(),
+                        "langchain4j",
+                        request.getUserQuestion(),
+                        () -> executeWithModel(request, modelProfile)
+                );
             } catch (RuntimeException ex) {
                 lastFailure = ex;
                 log.warn("LangChain4j workflow failed for model {} route={} scope={}: {}",
